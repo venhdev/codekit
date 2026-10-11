@@ -49,11 +49,13 @@ class _ExportConfirmationState extends State<_ExportConfirmation> {
         return;
       }
       if (share) {
+        final bool delivered;
         if (asFile) {
-          await shareDiagnosticFile(result.text!);
+          delivered = await shareDiagnosticFile(result.text!);
         } else {
-          await shareDiagnosticText(result.text!);
+          delivered = await shareDiagnosticText(result.text!);
         }
+        if (!delivered) return;
       } else {
         await Clipboard.setData(ClipboardData(text: result.text!));
       }

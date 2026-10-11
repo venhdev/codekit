@@ -176,7 +176,7 @@ class MemoryDiagnosticStore implements DiagnosticStore {
   final _ids = <String, int>{};
   final _sessions = <String, TraceSession>{};
   final _scope =
-      '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
+      '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(0x100000000)}';
   int _order = 0;
   bool _closed = false;
   @override

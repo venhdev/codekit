@@ -155,7 +155,8 @@ class CodeKitDiagnostics {
 
   String createRecordId() {
     _checkOpen();
-    return '${++_idSequence}-${List.generate(4, (_) => _random.nextInt(1 << 32).toRadixString(16).padLeft(8, '0')).join()}';
+    // A literal avoids JavaScript's 32-bit shift behavior (1 << 32 == 0).
+    return '${++_idSequence}-${List.generate(4, (_) => _random.nextInt(0x100000000).toRadixString(16).padLeft(8, '0')).join()}';
   }
 
   RecordReceipt _drop(RecordDropReason reason) {

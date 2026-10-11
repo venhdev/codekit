@@ -3,17 +3,21 @@ import 'dart:js_interop';
 import 'package:share_plus/share_plus.dart';
 import 'package:web/web.dart' as web;
 
-Future<void> shareText(String text) async {
-  await SharePlus.instance.share(
+Future<bool> shareText(String text) async {
+  final result = await SharePlus.instance.share(
     ShareParams(
       text: text,
       mailToFallbackEnabled: false,
       downloadFallbackEnabled: false,
     ),
   );
+  if (result.status == ShareResultStatus.unavailable) {
+    throw StateError('Share unavailable');
+  }
+  return result.status == ShareResultStatus.success;
 }
 
-Future<void> shareFile(String text) async {
+Future<bool> shareFile(String text) async {
   final blob = web.Blob(
     <JSAny>[text.toJS].toJS,
     web.BlobPropertyBag(type: 'text/plain;charset=utf-8'),
@@ -30,4 +34,5 @@ Future<void> shareFile(String text) async {
   } finally {
     web.URL.revokeObjectURL(url);
   }
+  return true;
 }

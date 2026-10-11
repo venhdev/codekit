@@ -3,27 +3,35 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-Future<void> shareText(String text) async {
-  await SharePlus.instance.share(
+Future<bool> shareText(String text) async {
+  final result = await SharePlus.instance.share(
     ShareParams(
       text: text,
       mailToFallbackEnabled: false,
       downloadFallbackEnabled: false,
     ),
   );
+  if (result.status == ShareResultStatus.unavailable) {
+    throw StateError('Share unavailable');
+  }
+  return result.status == ShareResultStatus.success;
 }
 
-Future<void> shareFile(String text) async {
+Future<bool> shareFile(String text) async {
   final directory = await getTemporaryDirectory();
   final path =
       '${directory.path}${Platform.pathSeparator}'
       'codekit-${DateTime.now().microsecondsSinceEpoch}.txt';
   final file = await File(path).writeAsString(text);
-  await SharePlus.instance.share(
+  final result = await SharePlus.instance.share(
     ShareParams(
       files: [XFile(file.path, mimeType: 'text/plain')],
       fileNameOverrides: ['codekit-diagnostics.txt'],
       downloadFallbackEnabled: false,
     ),
   );
+  if (result.status == ShareResultStatus.unavailable) {
+    throw StateError('Share unavailable');
+  }
+  return result.status == ShareResultStatus.success;
 }

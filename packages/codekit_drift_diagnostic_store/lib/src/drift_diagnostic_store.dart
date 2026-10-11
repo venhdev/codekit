@@ -47,7 +47,7 @@ final class DriftDiagnosticStore implements DiagnosticStore {
 
   DriftDiagnosticStore._(this._database, this._onWarning)
     : _cursorScope =
-          '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
+          '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(0x100000000)}';
 
   /// Opens a native SQLite database at [databasePath].
   ///
