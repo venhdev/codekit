@@ -1,0 +1,301 @@
+import 'dart:convert';
+
+import 'package:codekit_core/codekit_core.dart';
+import 'package:flutter/material.dart';
+
+import '../export/http_fragment_copy_dialog.dart';
+
+class RecordDetailsScreen extends StatelessWidget {
+  const RecordDetailsScreen({
+    super.key,
+    required this.diagnostics,
+    required this.record,
+  });
+
+  final CodeKitDiagnostics diagnostics;
+  final DiagnosticRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    final payload = record.payload;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          payload is HttpPayload
+              ? 'HTTP ${payload.method} ${payload.uri.path}'
+              : 'Log details',
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          SelectableText('ID: ${record.id}'),
+          Text('Recorded: ${record.recordedAt.toLocal()}'),
+          Text('Record mode: ${record.recordMode.name}'),
+          if (record.source != null) Text('Source: ${record.source}'),
+          if (payload is LogPayload) ...[
+            const Divider(),
+            Text(
+              payload.level.name.toUpperCase(),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            SelectableText(payload.message),
+            if (payload.error != null)
+              SelectableText(
+                '${payload.error!.type}: ${payload.error!.message}',
+              ),
+            if (payload.stackTrace != null) SelectableText(payload.stackTrace!),
+            if (payload.error?.stackTrace != null)
+              SelectableText(payload.error!.stackTrace!),
+          ],
+          if (payload is HttpPayload) ...[
+            const Divider(),
+            SelectableText('${payload.method} ${payload.uri}'),
+            Text('Status: ${payload.response?.statusCode ?? 'Unknown'}'),
+            Text(
+              'Duration: ${payload.duration?.inMilliseconds ?? 'Unknown'} ms',
+            ),
+            Text('Started: ${payload.requestStartedAt.toLocal()}'),
+            if (payload.error != null)
+              SelectableText('Error: ${payload.error!.message}'),
+            TextButton.icon(
+              onPressed: () => showHttpFragmentCopyDialog(
+                context,
+                diagnostics: diagnostics,
+                recordId: record.id,
+                fragment: HttpFragment.curl,
+              ),
+              icon: const Icon(Icons.copy),
+              label: const Text('Copy cURL'),
+            ),
+            _HttpSection(
+              title: 'Request',
+              recordId: record.id,
+              diagnostics: diagnostics,
+              target: HeaderTarget.request,
+              headers: payload.requestHeaders,
+              body: payload.requestBody,
+            ),
+            _HttpSection(
+              title: 'Response',
+              recordId: record.id,
+              diagnostics: diagnostics,
+              target: HeaderTarget.response,
+              headers: payload.response?.headers,
+              body: payload.response?.body,
+            ),
+          ],
+          if (record.context != null) ...[
+            const Divider(),
+            Text('Context', style: Theme.of(context).textTheme.titleMedium),
+            SelectableText(
+              const JsonEncoder.withIndent('  ').convert(record.context),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _HttpSection extends StatelessWidget {
+  const _HttpSection({
+    required this.title,
+    required this.recordId,
+    required this.diagnostics,
+    required this.target,
+    required this.headers,
+    required this.body,
+  });
+
+  final String title;
+  final String recordId;
+  final CodeKitDiagnostics diagnostics;
+  final HeaderTarget target;
+  final Map<String, List<String>>? headers;
+  final BodySnapshot? body;
+
+  @override
+  Widget build(BuildContext context) => ExpansionTile(
+    title: Text(title),
+    childrenPadding: const EdgeInsets.all(12),
+    children: [
+      Row(
+        children: [
+          Text('Headers', style: Theme.of(context).textTheme.titleSmall),
+          const Spacer(),
+          TextButton(
+            onPressed: () => showHttpFragmentCopyDialog(
+              context,
+              diagnostics: diagnostics,
+              recordId: recordId,
+              fragment: HttpFragment.headers,
+              target: target,
+            ),
+            child: const Text('Copy headers'),
+          ),
+        ],
+      ),
+      if (headers == null || headers!.isEmpty)
+        const Text('No headers captured')
+      else
+        for (final entry in headers!.entries)
+          ListTile(
+            dense: true,
+            title: Text(entry.key),
+            subtitle: SelectableText(entry.value.join(', ')),
+          ),
+      Row(
+        children: [
+          Text('Body', style: Theme.of(context).textTheme.titleSmall),
+          const Spacer(),
+          TextButton(
+            onPressed: () => showHttpFragmentCopyDialog(
+              context,
+              diagnostics: diagnostics,
+              recordId: recordId,
+              fragment: HttpFragment.body,
+              target: target,
+            ),
+            child: const Text('Copy body'),
+          ),
+        ],
+      ),
+      BodyInspector(body: body),
+    ],
+  );
+}
+
+/// Inspects captured text, JSON and media metadata without reading file bytes.
+class BodyInspector extends StatefulWidget {
+  const BodyInspector({super.key, required this.body});
+  final BodySnapshot? body;
+
+  @override
+  State<BodyInspector> createState() => _BodyInspectorState();
+}
+
+class _BodyInspectorState extends State<BodyInspector> {
+  String _mode = 'Pretty';
+  String _search = '';
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final body = widget.body;
+    if (body == null || body.state != BodyCaptureState.captured) {
+      return Text('Body ${body?.state.name ?? 'absent'}');
+    }
+    final data = body.data;
+    final raw = data is String ? data : jsonEncode(data);
+    final pretty = data is String
+        ? data
+        : const JsonEncoder.withIndent('  ').convert(data);
+    final isJson = body.representation == BodyRepresentation.json;
+    final isMedia = body.representation == BodyRepresentation.media;
+    final visible = _mode == 'Raw' ? raw : pretty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (isMedia)
+          const Text('Media metadata only; file contents were not captured.'),
+        if (isJson)
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final mode in ['Tree', 'Pretty', 'Raw'])
+                ChoiceChip(
+                  label: Text(mode),
+                  selected: _mode == mode,
+                  onSelected: (_) => setState(() => _mode = mode),
+                ),
+              if (_mode == 'Tree')
+                TextButton(
+                  onPressed: () => setState(() => _expanded = !_expanded),
+                  child: Text(_expanded ? 'Collapse' : 'Expand'),
+                ),
+            ],
+          ),
+        TextField(
+          decoration: const InputDecoration(labelText: 'Search body'),
+          onChanged: (value) => setState(() => _search = value),
+        ),
+        if (_search.isNotEmpty)
+          Text(
+            visible.toLowerCase().contains(_search.toLowerCase())
+                ? 'Match found'
+                : 'No match',
+          ),
+        if (_mode == 'Tree' && isJson)
+          _JsonTree(value: data, expanded: _expanded)
+        else
+          SelectableText(visible),
+      ],
+    );
+  }
+}
+
+class _JsonTree extends StatefulWidget {
+  const _JsonTree({
+    super.key,
+    required this.value,
+    required this.expanded,
+    this.label,
+  });
+  final Object? value;
+  final bool expanded;
+  final String? label;
+
+  @override
+  State<_JsonTree> createState() => _JsonTreeState();
+}
+
+class _JsonTreeState extends State<_JsonTree> {
+  late bool _open = widget.expanded;
+
+  @override
+  void didUpdateWidget(covariant _JsonTree oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.expanded != widget.expanded) _open = widget.expanded;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = widget.value;
+    if (value is! Map && value is! List) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: SelectableText(
+          '${widget.label ?? 'Value'}: ${jsonEncode(value)}',
+        ),
+      );
+    }
+    final length = value is Map ? value.length : (value as List).length;
+    return ExpansionTile(
+      key: ValueKey((widget.label, widget.expanded)),
+      title: Text('${widget.label ?? 'Root'} ($length)'),
+      initiallyExpanded: _open,
+      onExpansionChanged: (open) => setState(() => _open = open),
+      children: _open
+          ? [
+              if (value is Map)
+                for (final entry in value.entries)
+                  _JsonTree(
+                    key: ValueKey(entry.key),
+                    label: entry.key.toString(),
+                    value: entry.value,
+                    expanded: widget.expanded,
+                  ),
+              if (value is List)
+                for (var i = 0; i < value.length; i++)
+                  _JsonTree(
+                    key: ValueKey(i),
+                    label: '[$i]',
+                    value: value[i],
+                    expanded: widget.expanded,
+                  ),
+            ]
+          : const [],
+    );
+  }
+}

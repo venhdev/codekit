@@ -114,6 +114,7 @@ class CodeKitDiagnostics {
     }
   }
   RecordMode get recordMode => _recordMode;
+  bool get isTraceActive => _traceIds != null;
   set recordMode(RecordMode value) {
     _checkOpen();
     _recordMode = value;

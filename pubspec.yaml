@@ -8,3 +8,4 @@ workspace:
   - packages/codekit_http
   - packages/codekit_drift_diagnostic_store
   - packages/codekit_webhook
+  - packages/codekit_ui

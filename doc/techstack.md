@@ -14,7 +14,7 @@
 | dio | 5.11.1 |
 | http | 1.6.0 |
 
-## Proposed UI and platform dependencies
+## Selected UI and platform dependencies
 
 | Dependency | Version |
 | :--- | :--- |

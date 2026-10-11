@@ -2,3 +2,10 @@ include: package:lints/recommended.yaml
 analyzer:
   exclude:
     - .agents/**
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**

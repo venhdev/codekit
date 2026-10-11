@@ -1,7 +1,7 @@
 ---
 title: CodeKit Diagnostics UI
 description: First UI contract for inspecting diagnostic records, managing Trace sessions, exporting records, and reusing recent searches.
-status: draft
+status: active
 created: 2026-10-10
 updated: 2026-10-11
 ---
@@ -22,7 +22,8 @@ The view provides:
 
 - A text/regex search field over LOG message/source/error message and HTTP method/URI/source/error message. It does not search headers, bodies or context; body inspection retains its separate search.
 - A filter sheet opened from the app-bar Filters icon. The result count appears beneath the search bar; do not duplicate the filter control with a second Filters button in the results row.
-- Multi-select status chips for `2xx`, `3xx`, `4xx`, `5xx`, and no-status records; a from/to time range; duration categories (`fast`, `normal`, `warn`, `slow`, and no-duration); and record type (`app log` or `HTTP`).
+- While cursor pagination has more pages, the visible count is a lower bound (for example, `128+ matching`); the UI does not run a separate full-count scan on every search.
+- Multi-select status chips for `1xx`, `2xx`, `3xx`, `4xx`, `5xx`, and `Unknown` (missing/out-of-range HTTP status and app logs); a from/to time range; duration categories (`fast`, `normal`, `warn`, `slow`, and no-duration); and record type (`app log` or `HTTP`).
 - Multi-select record selection and a visible selected count.
 - Explicit export actions for selected records or all records matching the current search and filters. Searching or filtering alone does not export data.
 
@@ -55,9 +56,9 @@ Redacted is selected by default and file creation is unchecked. Export is unlimi
 
 ## Trace sessions
 
-The Trace sessions bottom sheet is 55% of the viewport height and scrolls its contents. It lists saved sessions, offers a create action, and exposes manual Start/Stop capture controls. A session can be exported directly from the list. Creating a picker-based session selects an inclusive time interval `[from, to]` and references all retained diagnostic record IDs in that interval.
+The Trace sessions bottom sheet is 55% of the viewport height and scrolls its contents. It lists saved sessions, offers a create action, and exposes manual Start/Stop capture controls. A session can be exported directly from the list or explicitly deleted through its actions menu after confirmation. Creating a picker-based session selects an inclusive time interval `[from, to]`, previews the currently queryable record count, and references all retained diagnostic record IDs in that interval.
 
-Picker-created and manually captured sessions appear in the same list. Manual Stop stores the accepted ID list without waiting for persistence; picker creation uses queryable records, as specified by the [Trace lifecycle](diagnostic-data-lifecycle.md#trace-sessions). Counts shown in the session list describe saved IDs, not a guarantee of currently available records.
+Picker-created and manually captured sessions appear in the same list. Manual Stop stores the accepted ID list without waiting for persistence; picker creation uses queryable records, as specified by the [Trace lifecycle](diagnostic-data-lifecycle.md#trace-sessions). Counts shown in the session list describe saved IDs, not a guarantee of currently available records. Manual capture remains active when the sheet closes; reopening shows Stop capture.
 
 Session export uses only IDs that currently resolve. When no records resolve, show a message and offer Delete session or Cancel; never delete automatically or create an empty file/clipboard export. Do not perform background completeness checks or remove sessions when their records disappear.
 
@@ -158,7 +159,7 @@ Fragment copy asks for representation on each action. Full-record export uses th
 │ Filters                    [Done]│
 ├──────────────────────────────────┤
 │ Status                           │
-│ [2xx] [3xx] [4xx] [5xx] [No status]
+│ [1xx] [2xx] [3xx] [4xx] [5xx] [Unknown]
 │                                  │
 │ Time range                       │
 │ From [ date / time ]             │
@@ -275,6 +276,4 @@ Tap a row to reuse its query and mode; existing filters remain unchanged.
 └──────────────────────────────────┘
 ```
 
-## Open decisions
-
-- Visual treatment for 1xx/non-standard status in the status-chip UI; core classifies all groups and missing/out-of-range codes as unknown.
+The `1xx` and `Unknown` chips use neutral colors. The CodeKit bubble is placed in `MaterialApp.builder` with the same `navigatorKey` as the app; it remains available across app routes and is hidden while the viewer is open.

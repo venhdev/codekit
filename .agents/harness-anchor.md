@@ -22,6 +22,8 @@ Run from workspace root with the pinned SDK:
 .fvm/flutter_sdk/bin/dart test packages/codekit_webhook/test
 .fvm/flutter_sdk/bin/dart analyze packages/codekit_drift_diagnostic_store
 cd packages/codekit_drift_diagnostic_store && ../../.fvm/flutter_sdk/bin/dart test
+.fvm/flutter_sdk/bin/flutter analyze packages/codekit_ui
+.fvm/flutter_sdk/bin/flutter test packages/codekit_ui/test
 ```
 
 Contract tests control time and write completion explicitly, without timing sleeps.
