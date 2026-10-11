@@ -1,6 +1,6 @@
 ---
 title: CodeKit HTTP Client Adapters
-status: draft
+status: active
 created: 2026-10-11
 updated: 2026-10-11
 ---

@@ -1,7 +1,7 @@
 ---
 title: CodeKit Diagnostic Data Lifecycle
 description: Event recording, retention, Trace session, export, and sink behavior for CodeKit.
-status: draft
+status: active
 created: 2026-10-10
 updated: 2026-10-11
 ---

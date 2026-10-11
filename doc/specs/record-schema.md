@@ -1,7 +1,7 @@
 ---
 title: CodeKit Record Schema
 description: Platform-neutral diagnostic models, body representation, and serialization boundaries.
-status: draft
+status: active
 created: 2026-10-11
 updated: 2026-10-11
 ---
