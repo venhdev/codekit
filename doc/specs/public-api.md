@@ -25,7 +25,7 @@ final diagnostics = CodeKitDiagnostics();
 
 // Optional native persistent setup.
 final diagnostics = await createDriftDiagnostics(
-  databasePath: '...',
+  databasePath: '/application/chosen/path/codekit.sqlite',
   retention: RetentionPolicy(maxRecords: 1000),
 );
 
@@ -168,7 +168,7 @@ enum StorageKind { memory, persistent }
 
 Memory implementations complete `appendAndRetain` synchronously; persistent implementations return a Future and run behind the core queue. The queue belongs to core, not the adapter. The adapter owns backend schema, resource opening, migrations and actual storage operations. A store instance has one diagnostics writer in MVP.
 
-Storage failures must remain distinguishable from missing IDs or empty queries. Adapters report I/O failures to core; core handles persistence receipts and exposes operation failures appropriately. SQL and transactions are not required by the public interface. Non-transactional implementations may partially change storage before reporting failure; failure is not proof that nothing was written. Drift should use a transaction for insertion and count eviction.
+Storage failures must remain distinguishable from missing IDs or empty queries. Adapters report I/O failures to core; core handles persistence receipts and exposes operation failures appropriately. SQL and transactions are not required by the public interface. Non-transactional implementations may partially change storage before reporting failure; failure is not proof that nothing was written. `codekit_drift_diagnostic_store` uses one transaction for insertion and count eviction. It opens native SQLite at the required `databasePath`, creates its parent directory, and owns the database resource through `CodeKitDiagnostics`. It stores codec-v1 record JSON plus internal order and stores Trace session IDs separately. Its initial Drift schema version is 1; unsupported future upgrade paths fail without destructive reset. Malformed persisted rows are skipped and reported through the adapter warning callback or Dart developer log.
 
 Batch lookup preserves requested ID order and deduplicates IDs; stores reject duplicate record IDs. Awaited storage operations propagate errors; export converts them into a failed ExportResult. Integration factory argument coverage remains adapter work.
 
@@ -176,7 +176,7 @@ Batch lookup preserves requested ID order and deduplicates IDs; stores reject du
 
 Query uses `RecordQuery` and returns `RecordPage` with `records` and nullable `nextCursor`. Default page size is 100. List order is newest to oldest by internal store order. Cursor is opaque; callers do not construct it. Search/filter changes or reload restart from the first page. New insertions must not duplicate records across ongoing pages; this does not promise a database snapshot across pages.
 
-Main-screen search matches LOG message/source/error message and HTTP method/URI/source/error message; it does not scan headers, bodies or context. Text search is case-insensitive substring matching; regex input is validated and invalid syntax reported rather than treated as text. Query pagination is a list behavior, not an export count limit. Search/filter selections resolve to IDs for the shared export path. Exact filter model fields and cursor validation remain implementation design work.
+Main-screen search matches LOG message/source/error message and HTTP method/URI/source/error message; it does not scan headers, bodies or context. Text search is case-insensitive substring matching; regex input is validated and invalid syntax reported rather than treated as text. Persistent Drift queries scan internal order in bounded chunks and apply the complete `RecordQuery` predicate in Dart, so regex pagination does not rely on SQLite regex support. Cursors resume strictly below the last returned row; filtered rows between pages may be scanned again but matching records are not skipped. Query pagination is a list behavior, not an export count limit. Search/filter selections resolve to IDs for the shared export path.
 
 ## Implemented public surface
 
@@ -188,7 +188,7 @@ RecordReceipt, PersistenceConfirmation, ExportResult, DiagnosticWarning and Reco
 
 ## Core implementation baseline
 
-The first workspace member is codekit_core only. Its initial SDK minimum is Dart 3.13, matching the verified toolchain; lowering it requires later compatibility checks. It has no runtime package dependencies. Package publishing is disabled until release readiness.
+The workspace has core, Dio, package:http and native Drift storage members. Core's initial SDK minimum is Dart 3.13 and it has no runtime package dependencies. The Drift package alone depends on Drift and native SQLite. Package publishing is disabled until release readiness.
 
 Public log levels are trace/debug/info/warning/error/fatal. Record results distinguish excluded, invalidInput, redactionFailed, queueFull, disposed and storageFailed; persistence failures resolve to null. Explicit query/Trace/export failures report errors to their awaited callers, not successful empty results. Logging/storage/sink failures cannot escape the producer path. Warning callback failures are swallowed on the separate reporting path.
 
@@ -200,7 +200,7 @@ Body media metadata uses MediaFileMetadata (fileName/contentType/sizeBytes/path,
 
 Runtime recordMode and redactionPolicy setters affect subsequent operations only. Retention is fixed at construction. Persistent queue capacity defaults to 1000 and excludes an active write. Disposal resolves pending/active receipts safely without waiting for a drain, stops sink submissions and closes owned stores/sinks. Running adapter work may finish while close executes according to that adapter; core does not claim rollback or later delivery.
 
-These concrete defaults complete the core slice; native database openers, HTTP wrappers, remote transports, platform UI/share and visual defaults are outside this implementation. Their acceptance checks require their actual target environments rather than mock-only feasibility claims.
+The native Drift store is verified against SQLite files, including close/reopen persistence. Web remains memory-only in MVP. Platform UI/share, remote transports and visual defaults are outside this implementation. Their acceptance checks require their actual target environments rather than mock-only feasibility claims.
 
 ## Verification boundary
 

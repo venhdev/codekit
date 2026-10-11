@@ -6,3 +6,4 @@ workspace:
   - packages/codekit_core
   - packages/codekit_dio
   - packages/codekit_http
+  - packages/codekit_drift_diagnostic_store

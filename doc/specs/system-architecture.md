@@ -32,7 +32,7 @@ Sinks implement `DiagnosticSink` and consume prepared diagnostic representations
 
 CodeKit will maintain optional storage adapter packages that applications can add as dependencies and initialize with minimal setup. An adapter owns its backend schema, migrations, persistence and queries, and implements the shared retention contract from the [diagnostic data lifecycle](diagnostic-data-lifecycle.md#retention-and-eviction). Applications configure storage location and retention limits through the adapter's supported setup API. Backends must not define competing retention semantics.
 
-These packages depend on core contracts; the core does not import their implementations. Drift is the sole CodeKit-maintained persistent backend selected for MVP. `codekit_drift_diagnostic_store` exposes `DriftDiagnosticStore` and `createDriftDiagnostics()`. The adapter targets Android, iOS and desktop native platforms; Web uses memory in MVP. Developers may implement the public `DiagnosticStore` contract for other backends. Encryption support and key management are not selected by this decision.
+These packages depend on core contracts; the core does not import their implementations. Drift is the sole CodeKit-maintained persistent backend selected for MVP. `codekit_drift_diagnostic_store` exposes `DriftDiagnosticStore.open(databasePath: ...)` and `createDriftDiagnostics(databasePath: ...)`. The application chooses the native database path and lifecycle; the adapter creates the parent directory and diagnostics closes the owned store on disposal. The initial Drift schema is version 1 and future upgrades require explicit migrations; unsupported upgrades fail without deleting the database. The adapter targets Android, iOS and desktop native platforms; Web uses memory in MVP. Developers may implement the public `DiagnosticStore` contract for other backends. Encryption support and key management are not selected by this decision.
 
 ### User interfaces and export
 
@@ -57,7 +57,7 @@ The [public API](public-api.md) owns entrypoint names, setup composition, receip
 | `codekit_ui` | Bubble, viewer, HTTP/JSON details and platform share/download | Core and Flutter. Initial Flutter helpers can remain here. |
 | `codekit_dio` | Dio capture, interceptor and withDiagnostics extension | Core and Dio. |
 | `codekit_http` | package:http capture, BaseClient wrapper and withDiagnostics extension | Core and package:http; independent of webhook delivery. |
-| `codekit_drift_diagnostic_store` | Native Drift persistence, schema, migrations and platform openers | Core and Drift; optional and not pulled into the umbrella. |
+| `codekit_drift_diagnostic_store` | Native Drift persistence, schema, explicit migrations and platform opening | Core and Drift; optional and not pulled into the umbrella. |
 | `codekit_webhook` | Webhook payload formatting and delivery | Core contracts and injected `WebhookTransport`; no Dio/http client types required by the interface. |
 | `colored_logger` | Independently usable console formatting/output | Existing library moved into the workspace; native/Web boundary requires adjustment before default umbrella inclusion. |
 
@@ -130,5 +130,4 @@ The diagnostics core targets Dart generally. Platform-specific behavior belongs 
 
 - Exact default umbrella composition and public exports, including colored console Web compatibility.
 - Remaining API signatures and codec details in the [record schema](record-schema.md); lifecycle behavior is owned by the [diagnostic data lifecycle](diagnostic-data-lifecycle.md).
-- Native Drift opener details and schema/migration implementation.
 - Existing package migration, compatibility, SDK constraints and examples membership details.
