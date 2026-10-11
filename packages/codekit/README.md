@@ -3,6 +3,9 @@
 Dart-first umbrella for `codekit_core` and `codekit_console`. It re-exports
 their public APIs without creating a global diagnostics instance.
 
+Version 0.1.0 is a redesign of the older 0.0.x `codekit` package. Its utility
+functions are not re-exported; existing callers need an explicit migration.
+
 ```dart
 import 'package:codekit/codekit.dart';
 

@@ -1,7 +1,7 @@
 ---
 title: Publish Packages from a Pub Workspace
 description: Release CodeKit workspace members individually through the standard Dart Pub workflow.
-status: draft
+status: active
 created: 2026-10-10
 updated: 2026-10-10
 ---
@@ -17,8 +17,25 @@ The [CodeKit roadmap](../roadmap.md) owns product milestones. The `/ci-pub` work
 - All packages in the release scope are complete, and their tests, formatting, and changelogs are ready for the `/ci-pub` preflight.
 - Version selection and manifest/changelog updates have passed the `/ci-pub` approval gate.
 - The workspace root is private (`publish_to: none`); each publishable member has its own valid `pubspec.yaml`.
+- Members remain `publish_to: none` during development. Remove that guard only from packages explicitly approved for a release, then repeat the dry-run and clean-tree checks before upload.
 - Every workspace member's Dart SDK constraint is at least `^3.6.0`, and internal dependency constraints accept the versions declared by local workspace members.
 - The release changes are committed and the Git working tree is clean before publication.
+
+## Compatibility and order
+
+The first CodeKit diagnostics release uses `0.1.0` for new packages. Their
+internal `^0.1.0` constraints accept compatible 0.1.x updates, but a 0.2.0
+breaking contract change requires coordinated dependent-package updates.
+`colored_logger` is a separate, previously published package and advances to
+2.2.0 for the Web-safe terminal fallback. The `codekit` umbrella is also
+previously published; its 0.1.0 redesign does not preserve the 0.0.x utility
+API. Existing consumers must migrate deliberately.
+
+Release order follows dependencies: `codekit_core` and `colored_logger` first;
+then `codekit_console`, `codekit_dio`, `codekit_http`,
+`codekit_drift_diagnostic_store`, `codekit_webhook`, `codekit_flutter` and
+`codekit_ui`; `codekit` last. Peer packages in the middle can be released in
+any order once their dependencies are available.
 
 ## Procedure
 

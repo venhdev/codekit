@@ -1,5 +1,6 @@
 name: codekit_webhook
 description: Discord and Telegram diagnostic sinks for CodeKit.
+repository: https://github.com/venhdev/codekit
 version: 0.1.0
 publish_to: none
 resolution: workspace

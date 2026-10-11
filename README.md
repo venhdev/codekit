@@ -1,21 +1,22 @@
 # CodeKit
 
-Dart diagnostics with an optional ecosystem of client adapters, storage and UI.
-The first implemented package is [codekit_core](packages/codekit_core/README.md).
-Other integrations are designed but not implemented yet.
+CodeKit is a Dart-first diagnostics workspace. The [codekit](packages/codekit/README.md)
+umbrella exports the platform-neutral recorder and colored console sink. HTTP
+capture, native persistence, webhooks, Flutter error hooks and the Flutter viewer
+are independently installable packages.
 
-Start with the [documentation index](doc/README.md), [public API](doc/specs/public-api.md)
-and [roadmap](doc/roadmap.md).
+```dart
+import 'package:codekit/codekit.dart';
 
-The private Pub workspace currently has one member. Use the repository's pinned
-SDK to resolve dependencies, run the core example and verify the implementation:
-
-```sh
-.fvm/flutter_sdk/bin/dart pub get
-.fvm/flutter_sdk/bin/dart run packages/codekit_core/example/main.dart
-.fvm/flutter_sdk/bin/dart analyze packages/codekit_core
-.fvm/flutter_sdk/bin/dart test packages/codekit_core/test
+final diagnostics = CodeKitDiagnostics(sinks: [ColoredConsoleSink()]);
+diagnostics.log(const LogInput(message: 'App started'));
 ```
 
-Packages are not ready for publication. Release workflow is documented separately
-in the [publishing runbook](doc/runbooks/pub-workspace-publishing.md).
+The [documentation index](doc/README.md) links to the authoritative
+[architecture](doc/specs/system-architecture.md),
+[public API](doc/specs/public-api.md) and [roadmap](doc/roadmap.md).
+The [harness anchor](.agents/harness-anchor.md) lists verification commands.
+
+No package has been published from this workspace. Release preparation and
+per-package publication are described in the
+[publishing runbook](doc/runbooks/pub-workspace-publishing.md).

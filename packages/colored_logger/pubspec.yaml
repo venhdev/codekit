@@ -1,5 +1,6 @@
 name: colored_logger
 description: Colored terminal logging for Dart and Flutter, with a Web-safe fallback.
+repository: https://github.com/venhdev/codekit
 version: 2.2.0
 publish_to: none
 resolution: workspace

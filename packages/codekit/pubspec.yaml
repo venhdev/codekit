@@ -1,5 +1,6 @@
 name: codekit
 description: Dart-first CodeKit diagnostics umbrella with colored console output.
+repository: https://github.com/venhdev/codekit
 version: 0.1.0
 publish_to: none
 resolution: workspace
