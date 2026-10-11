@@ -18,23 +18,22 @@ The product should help developers capture useful diagnostic context, inspect pr
 
 The ecosystem will include CodeKit-maintained optional adapter packages with minimal setup, including persistent storage. Package boundaries and supported backend/platform scope are defined by the [system architecture](specs/system-architecture.md#ready-to-use-storage-packages).
 
-The approved package map and workspace layout are owned by the [system architecture](specs/system-architecture.md#package-boundaries-and-workspace-layout). Public default exports remain open; selected backend and platform scope are owned by that architecture.
+The approved package map and workspace layout are owned by the [system architecture](specs/system-architecture.md#package-boundaries-and-workspace-layout). The `codekit` umbrella re-exports core and console; selected backend and platform scope are owned by that architecture.
 
 ## Candidate milestones
 
 | Order | Milestone | Status | Exit condition |
 | :--- | :--- | :--- | :--- |
-| 1 | Define package boundaries and diagnostic event contracts | Proposed | Package responsibilities, dependency direction, and a platform-neutral event contract are documented. |
+| 1 | Define package boundaries and diagnostic event contracts | Implemented | Package responsibilities, dependency direction, and a platform-neutral event contract are documented. |
 | 2 | Establish the Dart diagnostics foundation | Core implemented | A Dart-level API records and correlates logs, errors, stack traces, and diagnostic context without requiring Flutter or a specific storage adapter. |
 | 3 | Enable inspection and user-controlled export | Implemented, platform QA pending | Developers can inspect and filter records, use HTTP/JSON details, manage Trace sessions, and copy/export records or HTTP fragments through the agreed disclosure workflow. Flutter widget tests cover core UI flows; native share and browser download still need target-platform QA. |
-| 4 | Add development and operational integrations | In progress | Optional integrations such as native Drift persistence, Flutter error hooks, Dio and package:http capture, colored terminal output, and outbound webhooks can be adopted independently. The `codekit_dio`, `codekit_http`, `codekit_drift_diagnostic_store` and `codekit_webhook` packages are implemented; Flutter error hooks, CodeKit console integration and remaining integrations are pending. |
+| 4 | Add development and operational integrations | Implemented, platform QA pending | Optional native Drift persistence, Flutter error hooks, Dio and package:http capture, colored terminal output, and outbound webhooks can be adopted independently. Target-platform QA remains for native share and Web download. |
 | 5 | Add an optional MCP adapter | Proposed | An MCP server exposes narrowly scoped access to stable diagnostic data for compatible agents, without becoming a dependency of the core or application runtime. |
-| 6 | Prepare the umbrella package and publishing flow | Proposed | The supported package set, public exports, compatibility policy, and release process are documented. |
+| 6 | Prepare the umbrella package and publishing flow | In progress | The `codekit` umbrella and per-package release runbook exist. Compatibility policy, release validation and package metadata remain before publication. |
 
 These milestones describe a candidate sequence, not committed delivery dates or finalized package names. Update this roadmap when direction or milestone status changes; keep implementation contracts in their designated specifications.
 
 ## Open decisions
 
-- Existing package migration and compatibility details, including colored console Web support and whether `type_caster` has a concrete integration use case.
-- Which components the `codekit` umbrella package includes by default while keeping platform-specific integrations optional.
+- Whether `type_caster` has a concrete integration use case. It is not required for diagnostics MVP.
 - The MCP adapter's data source and local transport, after diagnostic export and storage contracts stabilize.

@@ -1,0 +1,10 @@
+name: colored_logger
+description: Colored terminal logging for Dart and Flutter, with a Web-safe fallback.
+version: 2.2.0
+publish_to: none
+resolution: workspace
+environment:
+  sdk: '>=3.13.0 <4.0.0'
+dev_dependencies:
+  lints: ^6.1.0
+  test: 1.31.1

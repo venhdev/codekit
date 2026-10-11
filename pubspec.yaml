@@ -9,3 +9,7 @@ workspace:
   - packages/codekit_drift_diagnostic_store
   - packages/codekit_webhook
   - packages/codekit_ui
+  - packages/codekit_flutter
+  - packages/colored_logger
+  - packages/codekit_console
+  - packages/codekit

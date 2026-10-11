@@ -17,7 +17,7 @@ Sinks are optional outputs. They do not replace the single queryable store and d
 
 `DiagnosticSink` is the core contract for prepared, immutable output. Its HTTP/LOG policy getters, `dispatch(DiagnosticRecord)`, and `dispose()` methods are implemented in core. Concrete destination types do not leak into core.
 
-`DiscordSink` and `TelegramSink` implement this interface in the selected `codekit_webhook` package. Service implementations belong in optional integrations, not core. Shared busy/circuit/transport logic uses composition; there is no base class or inheritance between the two service sinks. Console output integration is separate from these webhook service sinks.
+`DiscordSink` and `TelegramSink` implement this interface in the selected `codekit_webhook` package. Service implementations belong in optional integrations, not core. Shared busy/circuit/transport logic uses composition; there is no base class or inheritance between the two service sinks. `ColoredConsoleSink` in `codekit_console` is a separate, synchronous destination using `colored_logger`; its default HTTP and LOG policies receive all records, and callers can narrow either policy. The logger emits plain text on Web when no ANSI terminal is available.
 
 Service connection configuration, routing policy, content selection and presentation options are separate concerns. There is no cross-service `SenderInfo` or service-specific rendering model in core. The unified `diagnostics.log()` entrypoint is the normal application path; a separate direct `sendMessage()` API is not required by the approved MVP design.
 

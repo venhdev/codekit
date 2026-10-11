@@ -39,8 +39,8 @@
 | drift_dev | 2.35.1 |
 | build_runner | 2.16.1 |
 
-## Existing local package
+## Workspace console package
 
 | Package | Version |
 | :--- | :--- |
-| colored_logger | 2.1.0 |
+| colored_logger | 2.2.0 |

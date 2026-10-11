@@ -26,6 +26,7 @@ Future<void> shareFile(String text) async {
     web.document.body?.append(anchor);
     anchor.click();
     anchor.remove();
+    await Future<void>.delayed(Duration.zero);
   } finally {
     web.URL.revokeObjectURL(url);
   }

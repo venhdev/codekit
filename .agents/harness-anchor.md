@@ -24,6 +24,13 @@ Run from workspace root with the pinned SDK:
 cd packages/codekit_drift_diagnostic_store && ../../.fvm/flutter_sdk/bin/dart test
 .fvm/flutter_sdk/bin/flutter analyze packages/codekit_ui
 .fvm/flutter_sdk/bin/flutter test packages/codekit_ui/test
+.fvm/flutter_sdk/bin/flutter analyze packages/codekit_flutter
+.fvm/flutter_sdk/bin/flutter test packages/codekit_flutter/test
+.fvm/flutter_sdk/bin/dart analyze packages/colored_logger
+.fvm/flutter_sdk/bin/dart test packages/colored_logger/test
+.fvm/flutter_sdk/bin/dart analyze packages/codekit_console
+.fvm/flutter_sdk/bin/dart test packages/codekit_console/test
+.fvm/flutter_sdk/bin/dart analyze packages/codekit
 ```
 
 Contract tests control time and write completion explicitly, without timing sleeps.

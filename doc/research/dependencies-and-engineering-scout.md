@@ -28,7 +28,7 @@ Pub resolution verifies dependency constraints, not platform compilation, browse
 
 The registry contains baseline versions, not pubspec constraint syntax or transitive pins. Production member manifests will declare compatible constraints; the workspace root lockfile will own the actual resolved graph. Do not add direct dependencies merely because they appeared transitively in this probe. In particular, selecting a SQLite opener and Web assets remains part of the storage design, rather than a consequence of resolving Drift.
 
-The `colored_logger` entry reports the existing local manifest version. It was not part of the registry-package compatibility probe; its platform imports and migration remain separate work. `type_caster`, `intl`, Riverpod, Freezed, and a UUID package are not introduced by this report.
+The `colored_logger` entry reports the pre-migration local manifest version. This research did not include it in the registry-package compatibility probe; its current workspace and Web boundary are owned by the [system architecture](../specs/system-architecture.md#package-boundaries-and-workspace-layout). `type_caster`, `intl`, Riverpod, Freezed, and a UUID package are not introduced by this report.
 
 ## Primary evidence
 

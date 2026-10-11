@@ -15,6 +15,8 @@ This document owns approved entrypoint names, setup composition, receipts, query
 
 `CodeKitDiagnostics` is the public entrypoint. Applications create an explicit instance and pass it as `diagnostics` to adapters and UI; there is no core default singleton.
 
+The optional `codekit` umbrella re-exports `codekit_core` and `codekit_console` only. It adds no singleton or alternative recorder API. Flutter, client, Drift and webhook integrations remain separately installed.
+
 Core exposes `DiagnosticStore` and `MemoryDiagnosticStore`. The optional `codekit_drift_diagnostic_store` package exposes `DriftDiagnosticStore`.
 
 The top-level `createDriftDiagnostics()` factory belongs to the Drift package, not to the store class. It opens the store, composes diagnostics and releases opened resources if composition fails. The store class's `open()` creates only a store. Core never imports Drift.
