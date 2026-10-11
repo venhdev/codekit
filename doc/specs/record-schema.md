@@ -10,7 +10,7 @@ updated: 2026-10-11
 
 ## Authority and scope
 
-This document owns the shared diagnostic model and representation rules. The [system architecture](system-architecture.md) owns packages and dependencies; the [diagnostic data lifecycle](diagnostic-data-lifecycle.md) owns acceptance, visibility, retention, redaction and export. The initial core constructors and codec v1 are now implemented; integration-specific capture and backend migrations remain separate work.
+This document owns the shared diagnostic model and representation rules. The [system architecture](system-architecture.md) owns packages and dependencies; the [diagnostic data lifecycle](diagnostic-data-lifecycle.md) owns acceptance, visibility, retention, redaction and export.
 
 ## Input types and optional fields
 
@@ -69,10 +69,3 @@ File metadata is captured content, not an unsupported-state error. Media/file by
 Envelope fields are schemaVersion (integer 1), id (string), recordedAt (UTC ISO8601), recordMode (redactBeforeRecording/storeRaw), optional source/context, and payload. Log payload fields are type=log, message, level (trace/debug/info/warning/error/fatal), optional tags/error/stackTrace. HTTP payload fields are type=http, requestStartedAt, method, uri, optional durationMicros/requestHeaders/requestBody/response/error. Response fields are optional statusCode/headers/body. Error fields are type/message and optional stackTrace.
 
 Body fields are state (absent/captured/disabled/unsupported), representation (text/json/media only when captured), and data (required when captured, including explicit JSON null). Media data is a list of MediaFileMetadata objects with optional fileName/contentType/sizeBytes/path. This typed representation has no byte payload field. Unknown optional wire fields may be ignored; missing required fields and invalid enums/types produce invalid decode results. Schema version is checked by DiagnosticRecordCodec before decoding.
-
-## Integration details remaining
-
-- Public models/codec for the initial core slice are implemented in packages/codekit_core; defaults are summarized in the [public API](public-api.md#core-implementation-baseline).
-- Persistent backend-specific order encoding.
-- Adapter-specific request/body classification and safe stream completion integration; core representation and transient JSON behavior are implemented.
-- Backend schema migrations; codec v1 and decode results are defined by the core implementation.

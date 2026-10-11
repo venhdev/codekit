@@ -18,6 +18,8 @@ Run from workspace root with the pinned SDK:
 .fvm/flutter_sdk/bin/dart test packages/codekit_dio/test
 .fvm/flutter_sdk/bin/dart analyze packages/codekit_http
 .fvm/flutter_sdk/bin/dart test packages/codekit_http/test
+.fvm/flutter_sdk/bin/dart analyze packages/codekit_webhook
+.fvm/flutter_sdk/bin/dart test packages/codekit_webhook/test
 .fvm/flutter_sdk/bin/dart analyze packages/codekit_drift_diagnostic_store
 cd packages/codekit_drift_diagnostic_store && ../../.fvm/flutter_sdk/bin/dart test
 ```
@@ -36,5 +38,6 @@ asset build hook for the selected host platform. No external services are needed
 | Dio extension/interceptor tests | [interceptor_test.dart](../packages/codekit_dio/test/interceptor_test.dart) |
 | package:http wrapper tests | [client_wrapper_test.dart](../packages/codekit_http/test/client_wrapper_test.dart) |
 | package:http adapter integration suite | [local_http_integration_test.dart](../packages/codekit_http/test/local_http_integration_test.dart) |
+| Webhook transport and sink suite | [webhook_sinks_test.dart](../packages/codekit_webhook/test/webhook_sinks_test.dart) |
 
-The Drift suite uses real temporary SQLite files and verifies close/reopen durability, count eviction, query pagination and persisted Trace sessions. Webhook transport and platform UI/share checks require their target environments. Dio and package:http adapter integration tests use their real client packages and a loopback HTTP server.
+The Drift suite uses real temporary SQLite files and verifies close/reopen durability, count eviction, query pagination and persisted Trace sessions. The default webhook client is exercised against a local loopback server; remote service acceptance and platform UI/share checks require their target environments. Dio and package:http adapter integration tests use their real client packages and a loopback HTTP server.

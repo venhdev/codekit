@@ -1,0 +1,13 @@
+name: codekit_webhook
+description: Discord and Telegram diagnostic sinks for CodeKit.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+environment:
+  sdk: '>=3.13.0 <4.0.0'
+dependencies:
+  codekit_core: ^0.1.0
+  http: ^1.6.0
+dev_dependencies:
+  lints: ^6.1.0
+  test: 1.31.1

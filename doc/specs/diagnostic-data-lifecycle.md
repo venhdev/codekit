@@ -10,13 +10,13 @@ updated: 2026-10-11
 
 ## Authority and scope
 
-This document owns the lifecycle and flow of diagnostic events, including retention, Trace sessions, export, and sink delivery guarantees. The [system architecture](system-architecture.md) owns component boundaries and dependency direction. The [roadmap](../roadmap.md) owns product direction and milestones.
+This document owns the lifecycle and flow of diagnostic events, including retention, Trace sessions, and export. The [system architecture](system-architecture.md) owns component boundaries and dependency direction. The [diagnostic sinks](diagnostic-sinks.md) specification owns dispatch behavior and delivery guarantees. The [roadmap](../roadmap.md) owns product direction and milestones.
 
 This is a behavioral contract, not a storage-engine or serialization implementation design. Storage setup and count retention are settled below; persistent queue count and timeout behavior are specified below.
 
 ## Event flow
 
-Diagnostic producers submit `LogInput` or completed `HttpInput` through the single `CodeKitDiagnostics.log()` entrypoint. LOG input covers messages, errors, stack traces, tags, breadcrumbs and context. The recorder makes accepted records available to inspection, Trace session selection, and export. After validation and immutable snapshot preparation, diagnostics fans out into separate store and sink branches. Recording mode transforms the store copy; sink dispatch uses its current redaction policy independently. Sink filters, transport and delivery behavior are owned by [diagnostic sinks](diagnostic-sinks.md).
+Diagnostic producers submit `LogInput` or completed `HttpInput` through the single `CodeKitDiagnostics.log()` entrypoint. LOG input covers messages, errors, stack traces, tags, breadcrumbs and context. The recorder makes accepted records available to inspection, Trace session selection, and export. After validation and immutable snapshot preparation, diagnostics fans out into separate store and sink branches. Recording mode transforms the store copy. Sink processing follows the [diagnostic sinks contract](diagnostic-sinks.md).
 
 The [record schema](record-schema.md) owns shared models, supported values, body representation and serialization. Core context is supplied explicitly on each input; there is no ambient/Zone propagation feature in MVP. Concrete core signatures are defined by the public API and implementation. Each stored record retains the record mode used when it was accepted.
 
@@ -43,7 +43,7 @@ Logging does not wait for disk persistence. After snapshot validation and any re
 
 Persistent writes are processed in acceptance order. Queue overflow rejects the new record with a dropped-record indication instead of blocking the producer. Write failure completes the persistence result safely and warns through the separate failure path; there is no automatic retry or implicit memory fallback. Only explicitly accepted records contribute IDs to manual Trace capture. The optional `persistedOrNull` operation lets callers await confirmation safely; ordinary logging ignores that result. Receipt fields are specified by the [public API](public-api.md); the pending-count limit is specified above. Core does not impose a write timeout or start another write while an earlier one is still running; adapters must complete or report failure. A stalled adapter can fill the queue.
 
-A successful write means the adapter's declared storage operation succeeded; it is not a guarantee against every device failure. Pending records can be lost if the process ends. Webhook delivery is independent and must not delay storage.
+A successful write means the adapter's declared storage operation succeeded; it is not a guarantee against every device failure. Pending records can be lost if the process ends. Network sink behavior is specified by [diagnostic sinks](diagnostic-sinks.md#delivery-guards-and-failures).
 
 ## Record deletion and disposal
 
@@ -128,12 +128,6 @@ The default record mode is Store raw; users choose Redacted or As stored at expo
 HTTP adapters create one completed HTTP record when the request lifecycle reaches the adapter's declared completion boundary. The record carries a local correlation ID, `requestStartedAt`, measured duration, and `recordedAt` assigned when the recorder accepts it. The adapter allocates one ID before sending the request and retains it in internal request metadata; the completed record uses that same ID. Allocating an ID does not accept a record or add it to Trace capture. The correlation ID is internal metadata and is not added to the network request as a header. In MVP, streamed responses complete capture at response headers, mark body unsupported, and measure duration to headers; adapters do not wrap, buffer or consume the stream. Normal HTTP completes when its response or error snapshot is available. HTTP body capture is toggleable. Media/file bytes are not captured; a separate option selects metadata-only capture or inclusion of the raw local path.
 
 cURL is generated on demand from the structured HTTP data after the requested disclosure transformation, rather than stored as an independent canonical payload. As stored cURL reflects available stored fields; it cannot recover redacted values or uncaptured body/file bytes. Incomplete representations are identified as insufficient for replay. Generating or copying cURL does not send a request.
-
-## Webhook delivery
-
-Network delivery is one optional sink branch; it is not a persistence dependency. HTTP dispatch happens only once after response/error completion. LOG routing uses explicit tags and levels. Current redaction, per-sink policies, transport ownership, service options, busy-drop behavior and circuit cooldowns are owned by [diagnostic sinks](diagnostic-sinks.md).
-
-The store receipt describes recording, not remote delivery. Storage queue overflow or write failure does not suppress an independently eligible sink dispatch. Dispatch failure or busy-drop does not change the store receipt. There is no durable dispatch queue, retry or process-restart delivery promise.
 
 ## Later MCP integration
 

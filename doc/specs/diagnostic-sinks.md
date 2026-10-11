@@ -9,15 +9,15 @@ updated: 2026-10-11
 
 ## Authority and scope
 
-This document owns sink interfaces, routing policies, transport, delivery guards and service-specific presentation. [Public API](public-api.md) owns diagnostics setup and its single recording entrypoint. [Lifecycle](diagnostic-data-lifecycle.md) owns the store branch and shared redaction processing. [Record schema](record-schema.md) owns input and stored payload types.
+This document owns sink interfaces, routing policies, transport, delivery guarantees, guards and service-specific presentation. [Public API](public-api.md) owns diagnostics setup and its single recording entrypoint. [Lifecycle](diagnostic-data-lifecycle.md) owns record acceptance, persistence and export redaction. [Record schema](record-schema.md) owns input and stored payload types.
 
 Sinks are optional outputs. They do not replace the single queryable store and do not own persistence receipts or Trace data. `CodeKitDiagnostics` configures and coordinates sinks; it captures the current redaction policy once at dispatch start. Stored raw data and redacted dispatch data may differ without changing either branch's contract.
 
 ## Contracts and composition
 
-`DiagnosticSink` is a core interface implemented by console and network sinks. It receives a prepared, immutable diagnostic representation; concrete sink types do not leak into core. HTTP and LOG routing use the policies below. Method signatures for the internal prepared-dispatch hook remain implementation design work.
+`DiagnosticSink` is the core contract for prepared, immutable output. Its HTTP/LOG policy getters, `dispatch(DiagnosticRecord)`, and `dispose()` methods are implemented in core. Concrete destination types do not leak into core.
 
-`ConsoleSink`, `DiscordSink` and `TelegramSink` implement this interface. Service implementations belong in optional integrations, not core. Shared busy/circuit/transport logic uses composition; no mandatory large base class and no inheritance between Discord and Telegram implementations. The integration package split remains to be decided; do not create additional packages from these class names alone.
+`DiscordSink` and `TelegramSink` implement this interface in the selected `codekit_webhook` package. Service implementations belong in optional integrations, not core. Shared busy/circuit/transport logic uses composition; there is no base class or inheritance between the two service sinks. Console output integration is separate from these webhook service sinks.
 
 Service connection configuration, routing policy, content selection and presentation options are separate concerns. There is no cross-service `SenderInfo` or service-specific rendering model in core. The unified `diagnostics.log()` entrypoint is the normal application path; a separate direct `sendMessage()` API is not required by the approved MVP design.
 
@@ -80,35 +80,35 @@ Tags are developer-supplied event metadata, not destination names. Match tags ex
 | `levels` / `statusGroups` empty set | Match no records of that type. |
 | Include/exclude tags or patterns null or empty | No corresponding condition. |
 
-Network sinks default both dispatch policies to null. Console defaults to enabled policies for both types. Policy constructors detach collections into immutable snapshots. Optional parameters are nullable; required transport and destination settings remain required.
+Network sinks default both dispatch policies to null. A null policy disables automatic dispatch for that record type. Policy constructors detach collections into immutable snapshots. Optional parameters are nullable; a webhook destination is required, while its transport is optional.
 
 ## Transport and ownership
 
-`WebhookTransport` is injected into each network sink. Its request/response types use Dart values and bytes, not Dio/http library types. It sends one request and returns status, headers and body so the service adapter can interpret API success and rate-limit information. It must not silently retry or swallow delivery errors.
+`WebhookTransport` is optional on each network sink. Its request/response types use Dart values and bytes, not Dio/http library types. It sends one request and returns status, headers and body so the service adapter can interpret API success and rate-limit information. It must not silently retry or swallow delivery errors.
 
 ```dart
 abstract interface class WebhookTransport {
   Future<WebhookResponse> send(WebhookRequest request);
 }
 
-// Required request data: URI, HTTP method, headers, body bytes.
-// Required response data: status code, headers, body bytes.
-// Concrete constructors and repeated-header representation remain open.
+// Request data: URI, HTTP method, headers, body bytes.
+// Response data: status code, headers, body bytes.
+// Header values are lists so repeated values can be retained.
 ```
 
-Developer-supplied transport/client remains developer-owned. Diagnostics disposes sinks, but sinks do not close an injected app-wide client. Core and sink contracts do not require Dio or package:http; a developer can adapt an existing client. No default client implementation is selected by this contract.
+Without an injected transport, each sink creates one private `package:http` client and closes it when disposed. Webhook requests use this direct client rather than `codekit_http`, so the default delivery path cannot recursively enter the capture pipeline. An injected transport remains caller-owned: sink disposal does not close it and no internal client is created. The public transport contract remains client-neutral. If an injected transport sends through a client instrumented by the same `CodeKitDiagnostics`, the developer must exclude the webhook destination with `captureExcludeUriPatterns` or otherwise prevent recursive capture.
 
 ## Delivery guards and failures
 
-Dispatch is fire-and-forget relative to the producer and independent of store success. Invalid input and global capture exclusion prevent dispatch; storage queue overflow, recording redaction failure or write failure do not themselves gate the independently prepared sink branch. If dispatch redaction fails, skip dispatch and warn separately, with no raw fallback.
+Dispatch is fire-and-forget relative to the producer and independent of store success. A store receipt describes recording only; storage queue overflow or write failure does not suppress an independently eligible dispatch, and dispatch failure or busy-drop does not change the receipt. Invalid input and global capture exclusion prevent dispatch; recording redaction failure does not itself gate the independently prepared sink branch. If dispatch redaction fails, skip dispatch and warn separately, with no raw fallback. There is no durable dispatch queue, retry, or delivery promise across process restart.
 
 Each network sink permits one send at a time and has no pending queue. New dispatches while busy are dropped, not buffered or retried. Reserve the slot across dispatch preparation and transport completion; record generation must never wait for a network send. Sink failures do not delay another sink or the store branch.
 
-Circuit breaker defaults: five consecutive delivery failures open that sink for one minute. Success resets the counter. While open, skip dispatches; after cooldown allow one probe, reopen on failure and reset on success. Report state changes through the separate warning path rather than warning for every skipped dispatch. These values can be configured at construction; exact options class naming remains open.
+Circuit breaker defaults: five consecutive delivery failures open that sink for one minute. Success resets the counter. While open, skip dispatches; after cooldown allow one probe, reopen on failure and reset on success. Report state changes through the separate warning path rather than warning for every skipped dispatch. `SinkCircuitBreakerOptions` configures these values at construction.
 
 Honor a valid server-supplied rate-limit delay as an additional cooldown, even before five failures. Drop the affected message and later arrivals during cooldown; never replay it. Do not resume before either applicable circuit or server cooldown ends. Shared service limits must be respected when multiple sinks use the same remote identity; cross-instance coordination remains a transport/integration implementation concern, not a new durable queue.
 
-Disposal stops new dispatches, does not drain or promise delivery, and releases sink-owned resources. Injected transports remain caller-owned. Already-running sends may finish; failures are handled safely and must not produce recursive diagnostics via the same sink. HTTP calls made by webhook transports must not be captured and dispatched back into the same pipeline.
+Disposal stops new dispatches, does not drain or promise delivery, and releases sink-owned resources. Injected transports remain caller-owned. Already-running sends may finish; failures are handled safely and must not produce recursive diagnostics via the same sink. The default HTTP path bypasses the capture adapter; for injected transports, preventing recursive capture is the caller's responsibility as described above.
 
 ## Content selection
 
@@ -127,7 +127,7 @@ class DiagnosticContentOptions {
 
 Null uses package defaults: always include the LOG message/level or HTTP method/URI/status/duration summary; include error and stack trace when available; omit headers, bodies, cURL and context unless enabled. Options select already captured data. They never change capture, record mode, retention or redaction, and never read media/file bytes. Inapplicable or unavailable sections are omitted.
 
-Discord renders selected sections as embed fields; Telegram renders headings and escaped text/code sections. Presentation changes must not reintroduce raw data after dispatch redaction.
+Discord renders selected sections in one embed and disables automatic mentions; Telegram renders escaped text. Presentation changes must not reintroduce raw data after dispatch redaction.
 
 ## Service options
 
@@ -149,7 +149,7 @@ class TelegramSinkOptions {
 }
 ```
 
-Optional fields default to null and use documented service/package behavior. Exact visual defaults such as title/footer/timestamp and automatic color mapping must be documented by each implementation; nullable options do not imply inventing service capabilities. Discord username/avatar override the webhook identity for messages; Telegram sendMessage does not support those overrides. Telegram bot token/chat ID and Discord webhook URL are required connection settings, not presentation options. Credentials must not appear in failure warnings.
+Optional fields default to null and use documented service/package behavior. Discord has no automatic color mapping; specify `color` to set one. The package defaults to no title, footer, or timestamp. Discord username/avatar override the webhook identity for messages; Telegram sendMessage does not support those overrides. Telegram bot token/chat ID and Discord webhook URL are required connection settings, not presentation options. Credentials must not appear in failure warnings. The optional warning callback receives a stable code and credential-free message; callback failures are swallowed. Without a callback, the package reports warnings through `dart:developer`.
 
 MVP supports the fields above, not an exhaustive service SDK. Discord payload/embeds and Telegram payload mapping are private integration responsibilities. Rich media, polls, components, uploads and custom formatter callbacks are outside this initial surface.
 
@@ -161,49 +161,7 @@ MVP truncates only the dispatch representation with an explicit truncation indic
 
 Discord response interpretation considers its execution settings; using server confirmation (`wait=true`) is recommended internally so a send failure is observable without blocking the producer. Telegram success is defined by its JSON `ok` field, not status alone. Inspect response bodies and headers for documented rate-limit delays. No retry follows either truncation or delivery failure.
 
-## Setup example
-
-The following is a design example, not executable production code. Concrete constructors below are illustrative until implementation signatures are finalized.
-
-```dart
-final diagnostics = CodeKitDiagnostics(
-  redactionPolicy: RedactionPolicy(),
-  sinks: [
-    ConsoleSink(),
-    DiscordSink(
-      webhookUrl: discordWebhook,
-      transport: appTransport,
-      options: DiscordSinkOptions(
-        username: 'CodeKit · Mobile',
-        avatarUrl: avatarUri,
-        title: 'Diagnostics',
-        color: 0xE74C3C,
-      ),
-      contentOptions: DiagnosticContentOptions(
-        responseBody: true,
-        stackTrace: true,
-      ),
-      logDispatchPolicy: LogDispatchPolicy(
-        includeTags: {'appCrash'},
-      ),
-      httpDispatchPolicy: HttpDispatchPolicy(
-        statusGroups: {HttpStatusGroup.serverError},
-      ),
-    ),
-    TelegramSink(
-      botToken: telegramToken,
-      chatId: telegramChatId,
-      transport: appTransport,
-      options: TelegramSinkOptions(
-        disableNotification: true,
-      ),
-      logDispatchPolicy: LogDispatchPolicy(
-        includeTags: {'paymentSucceeded'},
-      ),
-    ),
-  ],
-);
-```
+Full `CodeKitDiagnostics` composition is shown in the [Public API example](public-api.md#unified-input-and-constructor-examples). Each network sink accepts an optional `WebhookTransport`; when omitted, the sink creates and closes its own `package:http` client. An injected transport remains caller-owned.
 
 ## Verified references
 

@@ -1,7 +1,7 @@
 ---
 title: CodeKit System Architecture
-description: System boundaries and dependency direction for the CodeKit diagnostics ecosystem.
-status: draft
+description: Authoritative package topology, dependency direction, and source layout for the CodeKit diagnostics ecosystem.
+status: active
 created: 2026-10-10
 updated: 2026-10-11
 ---
@@ -12,7 +12,13 @@ updated: 2026-10-11
 
 CodeKit provides diagnostics that Dart projects can adopt early and keep using during operation. It captures useful context, supports inspection and sharing, and allows optional integrations without making the general-purpose core depend on Flutter or a specific storage backend.
 
-The [CodeKit roadmap](../roadmap.md) owns product direction and milestones. This document owns system boundaries and dependency direction. The [diagnostic data lifecycle](diagnostic-data-lifecycle.md) owns event retention, Trace sessions, export, and sink delivery guarantees. The [diagnostics UI specification](diagnostics-ui.md) owns records inspection and UI workflows.
+The [CodeKit roadmap](../roadmap.md) owns product direction and milestones. This document is the architecture SSOT: it owns the package topology, package responsibilities, dependency direction, and recommended source layout. The [diagnostic data lifecycle](diagnostic-data-lifecycle.md) owns event retention, Trace sessions and export. The [diagnostic sinks](diagnostic-sinks.md) specification owns output delivery. The [diagnostics UI specification](diagnostics-ui.md) owns records inspection and UI workflows.
+
+## Architecture style
+
+CodeKit is a package-first modular Dart ecosystem. Independently installable packages are the primary implementation boundaries; packages connect through the public contracts in `codekit_core`. Keep `codekit_core` platform-neutral and let optional client, storage, output, and presentation packages depend inward on it.
+
+Within a package, group code by cohesive responsibility. Add another layer or collaborator when it owns a distinct invariant, lifecycle, or dependency boundary; do not create service/repository/manager layers or mirrored folders solely for architectural symmetry. Apply the cross-cutting design checks in [Engineering Standards](../standards/engineering-standards.md).
 
 ## System boundaries
 
@@ -32,7 +38,7 @@ Sinks implement `DiagnosticSink` and consume prepared diagnostic representations
 
 CodeKit will maintain optional storage adapter packages that applications can add as dependencies and initialize with minimal setup. An adapter owns its backend schema, migrations, persistence and queries, and implements the shared retention contract from the [diagnostic data lifecycle](diagnostic-data-lifecycle.md#retention-and-eviction). Applications configure storage location and retention limits through the adapter's supported setup API. Backends must not define competing retention semantics.
 
-These packages depend on core contracts; the core does not import their implementations. Drift is the sole CodeKit-maintained persistent backend selected for MVP. `codekit_drift_diagnostic_store` exposes `DriftDiagnosticStore.open(databasePath: ...)` and `createDriftDiagnostics(databasePath: ...)`. The application chooses the native database path and lifecycle; the adapter creates the parent directory and diagnostics closes the owned store on disposal. The initial Drift schema is version 1 and future upgrades require explicit migrations; unsupported upgrades fail without deleting the database. The adapter targets Android, iOS and desktop native platforms; Web uses memory in MVP. Developers may implement the public `DiagnosticStore` contract for other backends. Encryption support and key management are not selected by this decision.
+These packages depend on core contracts; the core does not import their implementations. Drift is the sole CodeKit-maintained persistent backend selected for MVP. `codekit_drift_diagnostic_store` exposes `DriftDiagnosticStore.open(databasePath: ...)` and `createDriftDiagnostics(databasePath: ...)`. The application chooses the native database path and lifecycle; the adapter creates the parent directory and diagnostics closes the owned store on disposal. The adapter opens native SQLite, uses one transaction for insertion and count-based eviction, and stores codec-v1 record JSON with an internal ordering key; Trace session IDs are stored separately. Its initial Drift schema is version 1 and future upgrades require explicit migrations; unsupported upgrades fail without deleting the database. Malformed persisted rows are skipped and reported through the adapter warning callback or Dart developer log. The adapter targets Android, iOS and desktop native platforms; Web uses memory in MVP. Developers may implement the public `DiagnosticStore` contract for other backends. Encryption support and key management are not selected by this decision.
 
 ### User interfaces and export
 
@@ -58,42 +64,24 @@ The [public API](public-api.md) owns entrypoint names, setup composition, receip
 | `codekit_dio` | Dio capture, interceptor and withDiagnostics extension | Core and Dio. |
 | `codekit_http` | package:http capture, BaseClient wrapper and withDiagnostics extension | Core and package:http; independent of webhook delivery. |
 | `codekit_drift_diagnostic_store` | Native Drift persistence, schema, explicit migrations and platform opening | Core and Drift; optional and not pulled into the umbrella. |
-| `codekit_webhook` | Webhook payload formatting and delivery | Core contracts and injected `WebhookTransport`; no Dio/http client types required by the interface. |
-| `colored_logger` | Independently usable console formatting/output | Existing library moved into the workspace; native/Web boundary requires adjustment before default umbrella inclusion. |
+| `codekit_webhook` | Discord and Telegram formatting, policies and outbound delivery | Core contracts; optional client-neutral `WebhookTransport`; package:http is the default internal client. |
+| `colored_logger` | CodeKit console formatting/output integration | Its native/Web boundary requires adjustment before inclusion. |
 
-Models, redaction and sessions stay in core instead of separate publishable packages. `codekit_http` is now selected for implementation alongside `codekit_dio`; both support installation independently of the umbrella. Their adapter contracts are owned by [HTTP client adapters](http-client-adapters.md). `type_caster` is not a required core dependency. MCP remains later work. Existing published library API compatibility and migration details must be addressed before moving library code.
+Models, redaction and sessions stay in core instead of separate publishable packages. The `type_caster` package is not a required core dependency. HTTP adapter contracts are owned by [HTTP client adapters](http-client-adapters.md).
 
 The repository uses a private Pub workspace root with explicitly listed members. Each member declares `resolution: workspace`; internal dependencies use compatible version constraints rather than development-only path dependencies. One root lockfile resolves members together. Publishing remains per package through the [publishing runbook](../runbooks/pub-workspace-publishing.md).
 
-```text
-codekit/
-├── pubspec.yaml                 # private workspace root
-├── pubspec.lock
-├── analysis_options.yaml
-├── .fvmrc
-├── doc/
-├── packages/
-│   ├── codekit/
-│   ├── codekit_core/
-│   ├── codekit_ui/
-│   ├── codekit_dio/
-│   ├── codekit_http/
-│   ├── codekit_drift_diagnostic_store/
-│   ├── codekit_webhook/
-│   └── colored_logger/
-├── examples/
-│   ├── dart_console/
-│   └── flutter_diagnostics/
-└── tool/
-```
+Examples with manifests must have explicit workspace membership or a deliberate independent resolution. Actual workspace membership is declared in the root `pubspec.yaml`; planned packages must not be created as empty placeholders.
 
-Examples with manifests must have explicit workspace membership or a deliberate independent resolution. The private workspace root and codekit_core member now exist. Other entries remain the target layout and must not be created as empty placeholder packages.
+Each package has a curated `lib/<package>.dart` entrypoint, private implementation under `lib/src/`, and `test/` and `example/` where applicable. Other packages must not import its `src` files. Keep client adapters organized around their client integration and snapshot conversion; the Drift package owns its database and store implementation; webhook code groups transport, provider formatting, and delivery behavior. Small packages may keep these files directly under `lib/src/` rather than adding unnecessary subfolders.
 
-Each package has a curated `lib/<package>.dart` entrypoint, private implementation under `lib/src/`, and `test/` and `example/` where applicable. Other packages must not import its `src` files. Core implementation groups follow actual responsibilities: `models`, `recorder`, `storage`, `retention`, `redaction`, `sessions`, `query`, `export`, and `sinks`. Additional service/repository/manager layers are not required merely for directory symmetry.
+The core groups implementation by responsibilities such as `models`, `recorder`, `storage`, `retention`, `redaction`, `sessions`, `query`, `export`, and `sinks`. These are responsibility boundaries, not a requirement to create an empty folder for every term; a responsibility can remain with its current cohesive module until it warrants extraction.
+
+The optional Flutter UI uses feature-oriented folders because its user flows have separate presentation state and interactions. The intended organization is `records`, `record_details`, `traces`, `search_history`, `export`, and genuinely shared or platform-specific helpers. Features call public core APIs; they do not access stores directly. The UI spec owns screens, wireframes, and interaction behavior.
 
 ## Store and sink composition
 
-`CodeKitDiagnostics` is the explicit instance entrypoint; its constructor composes one store, retention/redaction configuration and multiple sinks. LOG and HTTP both enter through `log()` with typed input. A store remains distinct from sinks because it owns queryable data and persistence receipts; console and remote outputs do not become alternative query stores. Diagnostics owns its store and sinks, while developer-injected transport clients remain developer-owned. Discord/Telegram configurations remain in optional integrations; their exact package split is not selected yet.
+`CodeKitDiagnostics` coordinates a queryable store and optional output sinks; sinks are not alternate stores. Public construction and resource ownership are specified in the [Public API](public-api.md), while output transport and delivery contracts belong to [Diagnostic Sinks](diagnostic-sinks.md).
 
 ## Dependency direction
 
@@ -108,12 +96,12 @@ Dart application and optional producers
  adapter         │       │
                  │       ├── codekit_ui (optional)
                  │       └── custom application UI
-                 └── webhook (fire-and-forget)
+                 └── webhook output
 
 Later: MCP adapter consumes stable diagnostic/export APIs
 ```
 
-Adapters may depend on the core contracts. The core must not import a platform adapter or depend on a UI, webhook client, or MCP implementation.
+Adapters may depend on the core contracts. The core must not import a platform adapter or depend on a UI, webhook client, or MCP implementation. Applications compose the core with only the optional packages they use; the umbrella does not make Flutter, client adapters, persistent storage, or webhook delivery mandatory.
 
 ## Supported environment boundary
 
@@ -125,9 +113,3 @@ The diagnostics core targets Dart generally. Platform-specific behavior belongs 
 - Requiring persistent storage or one storage technology.
 - Requiring webhook delivery or an MCP server.
 - Making a Trace session a second event-capture system separate from diagnostics.
-
-## Open design points
-
-- Exact default umbrella composition and public exports, including colored console Web compatibility.
-- Remaining API signatures and codec details in the [record schema](record-schema.md); lifecycle behavior is owned by the [diagnostic data lifecycle](diagnostic-data-lifecycle.md).
-- Existing package migration, compatibility, SDK constraints and examples membership details.

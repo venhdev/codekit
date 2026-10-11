@@ -10,9 +10,9 @@ updated: 2026-10-11
 
 ## Scope and recommendation
 
-Use the installed Flutter toolchain to resolve the shared dependency graph, including SDK-pinned test dependencies. The [version registry](../techstack.md) owns the proposed baseline versions; this report owns research evidence and recommendations, not architecture or engineering requirements.
+Use the installed Flutter toolchain to resolve the shared dependency graph, including SDK-pinned test dependencies. The [version registry](../techstack.md) owns selected and proposed baseline versions; this report owns research evidence and recommendations, not architecture or engineering requirements.
 
-The core needs no new runtime dependency for the currently approved contracts. Dio belongs in its adapter; sharing, native temporary-directory lookup and browser download APIs belong in UI/platform code. `http` is a proposed webhook client, not a selected transport. Following design approval, Drift is the selected native MVP backend under the [system architecture](../specs/system-architecture.md#system-boundaries). No production manifests or packages were created by this scout.
+The core needs no new runtime dependency for the currently approved contracts. Dio belongs in its adapter; sharing, native temporary-directory lookup and browser download APIs belong in UI/platform code. `http` is selected as the default internal transport dependency of the optional `codekit_webhook` package; injected transports remain client-neutral. Drift is the selected native MVP backend under the [system architecture](../specs/system-architecture.md#system-boundaries).
 
 ## Compatibility evidence
 
@@ -48,8 +48,8 @@ Memozen source paths below are relative to that repository, not CodeKit dependen
 
 | Memozen input | Recommendation for CodeKit | Adjustment |
 | :--- | :--- | :--- |
-| `docs/README.md`: single documentation ownership | Reuse | Already established by the CodeKit documentation index; avoid another master architecture document. |
-| `docs/architecture/client-mobile/mobile-architecture.md`: framework-free kernel | Reuse principle | Preserve pure Dart core, immutable snapshots and inward dependencies. Use the existing package boundaries; omit app layers and performance promises without measurement. |
+| `docs/README.md`: single documentation ownership | Reuse | Follow the CodeKit documentation index and its designated architecture SSOT; do not create a competing architecture authority. |
+| `docs/architecture/client-mobile/mobile-architecture.md`: framework-free kernel | Reuse principle | Applied selectively in [CodeKit System Architecture](../specs/system-architecture.md#architecture-style): keep the core platform-neutral and dependencies directed inward; omit app-specific layers and unmeasured performance promises. |
 | `docs/architecture/standards/code-quality-standards.md`: analysis and formatting | Reuse with adaptation | Analyze without rewriting files; format separately. Use Dart commands for Dart packages and Flutter commands for Flutter packages. Generated files are verified through generation and compilation, not hand editing. |
 | `docs/architecture/standards/naming-and-identifiers.md`: naming and collisions | Reuse with adaptation | PascalCase types, lowerCamelCase members and Dart constants, snake_case files, descriptive identifiers and positive boolean names. Do not decide codec field naming through an app naming standard. |
 | Same naming document: mandatory architectural suffixes | Omit | Do not require Command/Query/Orchestrator/Repository types unless the actual responsibility warrants them. |
@@ -65,6 +65,6 @@ The adopted cross-cutting rules are owned by the
 remains research evidence and records selective reuse recommendations; it does
 not establish or duplicate normative engineering requirements.
 
-Keep package boundaries in system architecture, serialization in record schema, queue/retention/redaction behavior in lifecycle, and interaction rules in UI. In particular, preserve the approved best-effort FIFO queue, reject-new overflow, no retry/fallback, disposal without draining, simple dotted object redaction paths, and Trace export that skips missing IDs.
+Architecture choices belong to [System Architecture](../specs/system-architecture.md); serialization belongs to [Record Schema](../specs/record-schema.md); recording, retention, and redaction behavior belong to [Diagnostic Data Lifecycle](../specs/diagnostic-data-lifecycle.md); interaction rules belong to [Diagnostics UI](../specs/diagnostics-ui.md). This scout remains research evidence rather than a parallel source for those contracts.
 
-Continue architectural clarification for the native Drift platform openers, webhook transport, supported consumer SDK minimums, native/Web build requirements and complete codec field coverage. Do not copy Memozen versions without resolving them against CodeKit's toolchain.
+Continue architectural clarification for the native Drift platform openers, supported consumer SDK minimums, native/Web build requirements and complete codec field coverage. The webhook transport direction is selected and its default client path is implemented; remote-service acceptance is still pending. Do not copy Memozen versions without resolving them against CodeKit's toolchain.
