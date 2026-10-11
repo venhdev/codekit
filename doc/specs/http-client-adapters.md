@@ -43,7 +43,7 @@ extension DioDiagnosticsExtension on Dio {
 }
 ```
 
-Each interceptor allocates the request/record ID before dispatch, records timing in private request metadata, and submits one completed HttpInput through diagnostics.log after response or error. It does not inject an ID network header. Capture processing must not prevent Dio handler continuation or alter application results. Retry/redirect and metadata ownership require the spike below before implementation is finalized.
+Each interceptor allocates the request/record ID before dispatch, records timing in private per-interceptor request metadata, and submits one completed HttpInput through diagnostics.log after response or error. Each retry attempt that re-enters the interceptor is recorded separately; redirects handled inside the Dio adapter remain part of one logical request. It does not inject an ID network header. Capture processing must not prevent Dio handler continuation or alter application results.
 
 ## package:http
 
@@ -59,18 +59,20 @@ final client = http.Client().withDiagnostics(diagnostics);
 await client.get(Uri.parse('https://example.com/users/42'));
 ```
 
-The wrapper's send() tracks a logical request, delegates to inner.send(), and submits normalized input. Calls directly through the inner client or top-level http functions bypass the wrapper. Client-internal retries/redirects are not promised as separately captured attempts.
+The wrapper's `send()` tracks a logical request, delegates to inner `send()`, and submits normalized input. Calls directly through the inner client or top-level `http` functions bypass the wrapper. Retry visibility follows wrapper order: a wrapper around `RetryClient` records its final result, while a `RetryClient` around the CodeKit wrapper can submit each attempt through it. Redirects handled inside the underlying client are not exposed as separate attempts.
 
 Request bodies already available for safe snapshotting may be captured. Multipart capture uses available fields/media metadata without reading file bytes. Streamed request bodies are not read ahead. At the approved response-headers boundary, response bodies are unsupported, including get()/post() calls that are subsequently buffered by BaseClient: the wrapper does not see that later buffering. It returns the original response stream and does not consume it to improve diagnostics.
 
 Capture exclusions apply before diagnostic processing. Cancellation/network failures retain the application error and produce a completed diagnostic error snapshot where possible. Snapshot models contain no live client types.
 
-The wrapper close()/inner-client ownership rule and repeated wrapping behavior still require clarification; do not silently borrow a sink transport ownership rule for application clients. Closing diagnostics does not itself imply closing a developer's Dio/client instance.
+The app chooses when to close the returned wrapper. `CodeKitHttpClient.close()` closes the wrapper and forwards close to its inner client exactly once; callers should use and close the returned wrapper instead of continuing to use the original client reference. Wrapping the same diagnostics instance again anywhere in a wrapper chain returns the current wrapper; a distinct diagnostics instance creates another layer. Closing diagnostics does not close a developer's HTTP client.
 
-## Required scratch verification
+## Dio implementation and verification
 
-- Dio: extension idempotence, manual attachment detection, multiple diagnostics metadata isolation, response/error single submission, retries and handler continuation on capture failure.
-- HTTP: convenience-method routing through send(), body-safe Request/MultipartRequest capture, untouched request/response streams, cancellation/error propagation and wrapper resource ownership after that rule is selected.
-- Both: detached nested snapshots, internal ID correlation, no network header injection, exclusion and non-recursive webhook delivery.
+The `codekit_dio` member implements the extension, public interceptor, detached snapshot conversion, multipart file metadata capture, and integration tests against a loopback HTTP server. Verified behaviors include deduplication, manual attachment detection, response/error capture, redirect handling, retry attempts, cancellation, global URI exclusion, disposed diagnostics, and independent metadata for multiple diagnostics instances. The interceptor captures only data already available at its boundary; byte arrays and streamed response bodies are unsupported.
 
-These are planned proofs, not claims of completed verification. No production adapter package has been created by this documentation update.
+## HTTP implementation and verification
+
+The `codekit_http` member implements `http.Client.withDiagnostics()` and `CodeKitHttpClient extends http.BaseClient`. It records at the `send()` boundary, captures available text/JSON request bodies and multipart fields/file metadata without reading file streams, and returns the original `StreamedResponse` without consuming its body. Multipart `Content-Type` is recorded as `multipart/form-data`; the boundary added later by `package:http` finalization is not captured. Response records complete at the headers boundary, so response body capture remains unsupported for convenience methods too.
+
+Tests use the actual `http` package and a loopback server. They verify convenience-method routing, request snapshotting, multipart metadata, stream preservation, URI exclusion, cancellation/error propagation, wrapper close forwarding, repeated wrapping and continued HTTP operation after `diagnostics.dispose()`. They do not claim remote-network or webhook integration coverage. Webhook request exclusion from this pipeline remains to be verified with the webhook transport implementation.

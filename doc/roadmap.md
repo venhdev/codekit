@@ -36,7 +36,7 @@ The approved package map and workspace layout are owned by the [system architect
 | 1 | Define package boundaries and diagnostic event contracts | Proposed | Package responsibilities, dependency direction, and a platform-neutral event contract are documented. |
 | 2 | Establish the Dart diagnostics foundation | Core implemented | A Dart-level API records and correlates logs, errors, stack traces, and diagnostic context without requiring Flutter or a specific storage adapter. |
 | 3 | Enable inspection and user-controlled export | Proposed | Developers can inspect and filter records, use HTTP/JSON details, manage Trace sessions, and copy/export records or HTTP fragments through the agreed disclosure workflow. |
-| 4 | Add development and operational integrations | Proposed | Optional integrations such as Flutter error hooks, Dio collection, colored terminal output, and outbound webhooks can be adopted independently. |
+| 4 | Add development and operational integrations | In progress | Optional integrations such as Flutter error hooks, Dio and package:http capture, colored terminal output, and outbound webhooks can be adopted independently. The `codekit_dio` and `codekit_http` adapters are implemented; remaining integrations are pending. |
 | 5 | Add an optional MCP adapter | Proposed | An MCP server exposes narrowly scoped access to stable diagnostic data for compatible agents, without becoming a dependency of the core or application runtime. |
 | 6 | Prepare the umbrella package and publishing flow | Proposed | The supported package set, public exports, compatibility policy, and release process are documented. |
 

@@ -4,3 +4,5 @@ environment:
   sdk: '>=3.13.0 <4.0.0'
 workspace:
   - packages/codekit_core
+  - packages/codekit_dio
+  - packages/codekit_http
