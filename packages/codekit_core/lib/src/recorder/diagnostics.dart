@@ -470,8 +470,8 @@ class CodeKitDiagnostics {
       switch (fragment) {
         case HttpFragment.headers:
           text = encode({
-            if (target != HeaderTarget.response) 'request': p.requestHeaders,
-            if (target != HeaderTarget.request) 'response': p.response?.headers,
+            if (target.includesRequest) 'request': p.requestHeaders,
+            if (target.includesResponse) 'response': p.response?.headers,
           });
         case HttpFragment.body:
           String bodyText(BodySnapshot? body) =>

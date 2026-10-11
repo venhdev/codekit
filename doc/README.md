@@ -7,6 +7,7 @@
 | **CodeKit Roadmap** | [`roadmap.md`](roadmap.md) | Product direction, milestones, and roadmap status |
 | **Dependency Versions** | [`techstack.md`](techstack.md) | Proposed direct dependency versions and conditional candidates; version tables only |
 | **Dependency & Engineering Scout** | [`research/dependencies-and-engineering-scout.md`](research/dependencies-and-engineering-scout.md) | Compatibility evidence and recommendations for selective reuse of Memozen standards; not normative design contracts |
+| **Engineering Standards** | [`standards/engineering-standards.md`](standards/engineering-standards.md) | Cross-cutting enum, constants, reuse, OOP, SOLID, implementation, formatting, and verification practices |
 | **System Architecture** | [`specs/system-architecture.md`](specs/system-architecture.md) | System boundaries, dependency direction, and diagnostic flow |
 | **Public API** | [`specs/public-api.md`](specs/public-api.md) | Entrypoint naming, setup, receipts and storage interface; proposals are identified separately |
 | **Record Schema** | [`specs/record-schema.md`](specs/record-schema.md) | Shared models, supported values, body representation, and serialization boundaries |

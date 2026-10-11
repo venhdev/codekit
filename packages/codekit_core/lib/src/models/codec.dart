@@ -22,7 +22,7 @@ class DiagnosticRecordCodec {
       if (version is! int) {
         return const RecordDecodeResult(RecordDecodeStatus.invalid);
       }
-      if (version != 1) {
+      if (version != diagnosticRecordSchemaVersion) {
         return const RecordDecodeResult(RecordDecodeStatus.unsupportedVersion);
       }
       return RecordDecodeResult(

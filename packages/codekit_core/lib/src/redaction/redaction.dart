@@ -4,7 +4,14 @@ import '../models/records.dart';
 
 const redactionMarker = '[REDACTED]';
 
-enum HeaderTarget { request, response, both }
+enum HeaderTarget {
+  request,
+  response,
+  both;
+
+  bool get includesRequest => this != response;
+  bool get includesResponse => this != request;
+}
 
 sealed class RedactionRule {
   const RedactionRule();
@@ -85,11 +92,10 @@ final class RedactionPolicy {
               }
             }
           }
-          if (rule.target != HeaderTarget.response) {
+          if (rule.target.includesRequest) {
             redactHeaders(payload['requestHeaders']);
           }
-          if (rule.target != HeaderTarget.request &&
-              payload['response'] is Map) {
+          if (rule.target.includesResponse && payload['response'] is Map) {
             redactHeaders((payload['response'] as Map)['headers']);
           }
         case QueryRedactionRule():

@@ -1,5 +1,7 @@
 import 'dart:collection';
 
+const int diagnosticRecordSchemaVersion = 1;
+
 enum LogLevel { trace, debug, info, warning, error, fatal }
 
 enum RecordMode { redactBeforeRecording, storeRaw }
@@ -17,8 +19,15 @@ enum HttpStatusGroup {
   unknown;
 
   static HttpStatusGroup fromCode(int? code) {
-    if (code == null || code < 100 || code >= 600) return unknown;
-    return values[code ~/ 100 - 1];
+    if (code == null) return unknown;
+    return switch (code) {
+      >= 100 && < 200 => informational,
+      >= 200 && < 300 => success,
+      >= 300 && < 400 => redirection,
+      >= 400 && < 500 => clientError,
+      >= 500 && < 600 => serverError,
+      _ => unknown,
+    };
   }
 }
 
@@ -378,7 +387,7 @@ final class DiagnosticRecord {
   }
 
   Map<String, Object?> toJson() => {
-    'schemaVersion': 1,
+    'schemaVersion': diagnosticRecordSchemaVersion,
     'id': id,
     'recordedAt': recordedAt.toIso8601String(),
     'recordMode': recordMode.name,

@@ -2,6 +2,7 @@
 
 ## Governing contracts
 
+- [Engineering Standards](../doc/standards/engineering-standards.md): cross-cutting implementation, Dart formatting and verification practices.
 - [Public API](../doc/specs/public-api.md): concrete core defaults and verification boundaries.
 - [Lifecycle](../doc/specs/diagnostic-data-lifecycle.md): queue, receipts, retention, redaction and Trace behavior.
 - [Record schema](../doc/specs/record-schema.md): snapshot and codec semantics.

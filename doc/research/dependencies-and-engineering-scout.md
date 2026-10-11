@@ -58,9 +58,12 @@ Memozen source paths below are relative to that repository, not CodeKit dependen
 | Root and mobile architecture: feature-first app hierarchy, Riverpod, offline-first database authority | Omit | CodeKit is a library ecosystem with optional storage and best-effort recording, not a synchronized end-user app. |
 | `AGENTS.md`: app stack locks and workflow gates | Omit | Memozen-specific instructions do not become CodeKit standards. |
 
-## Proposed documentation ownership and next design steps
+## Engineering standards authority
 
-If adopted, use one `doc/standards/engineering-standards.md` for naming, analysis, formatting and general test discipline. Register it in the documentation index and link testing guidance from `.agents/harness-anchor.md`. This report proposes that document; it does not establish those recommendations as requirements yet.
+The adopted cross-cutting rules are owned by the
+[Engineering Standards](../standards/engineering-standards.md). This scout
+remains research evidence and records selective reuse recommendations; it does
+not establish or duplicate normative engineering requirements.
 
 Keep package boundaries in system architecture, serialization in record schema, queue/retention/redaction behavior in lifecycle, and interaction rules in UI. In particular, preserve the approved best-effort FIFO queue, reject-new overflow, no retry/fallback, disposal without draining, simple dotted object redaction paths, and Trace export that skips missing IDs.
 

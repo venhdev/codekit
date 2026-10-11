@@ -8,6 +8,10 @@ import 'package:drift/drift.dart';
 
 import 'database/diagnostic_database.dart';
 
+const int _idQueryBatchSize = 500;
+const int _queryScanBatchSize = 256;
+const int _cursorVersion = 1;
+
 typedef DriftStoreWarningCallback = void Function(
   String message,
   Object? error,
@@ -163,7 +167,7 @@ final class DriftDiagnosticStore implements DiagnosticStore {
     if (ids.isEmpty) return const [];
     final uniqueIds = ids.toSet().toList();
     final records = <String, DiagnosticRecord>{};
-    for (final idBatch in _chunks(uniqueIds, 500)) {
+    for (final idBatch in _chunks(uniqueIds, _idQueryBatchSize)) {
       final rows = await (_database.select(
         _database.storedRecordRows,
       )..where((row) => row.recordId.isIn(idBatch))).get();
@@ -183,12 +187,10 @@ final class DriftDiagnosticStore implements DiagnosticStore {
     final before = _decodeCursor(query);
     final matching = <({int order, DiagnosticRecord record})>[];
     var scanBefore = before;
-    const scanBatchSize = 256;
-
     while (matching.length <= query.limit) {
       final rowsQuery = _database.select(_database.storedRecordRows)
         ..orderBy([(row) => OrderingTerm.desc(row.order)])
-        ..limit(scanBatchSize);
+        ..limit(_queryScanBatchSize);
       if (scanBefore != null) {
         rowsQuery.where(
           (row) => row.order.isSmallerThan(Variable(scanBefore!)),
@@ -205,7 +207,9 @@ final class DriftDiagnosticStore implements DiagnosticStore {
           if (matching.length > query.limit) break;
         }
       }
-      if (matching.length > query.limit || rows.length < scanBatchSize) break;
+      if (matching.length > query.limit || rows.length < _queryScanBatchSize) {
+        break;
+      }
     }
 
     final hasMore = matching.length > query.limit;
@@ -222,7 +226,7 @@ final class DriftDiagnosticStore implements DiagnosticStore {
     try {
       final decoded = jsonDecode(utf8.decode(base64Url.decode(value)));
       if (decoded is! Map<String, dynamic> ||
-          decoded['v'] != 1 ||
+          decoded['v'] != _cursorVersion ||
           decoded['scope'] != _cursorScope ||
           decoded['query'] != query.fingerprint ||
           decoded['before'] is! int) {
@@ -237,7 +241,7 @@ final class DriftDiagnosticStore implements DiagnosticStore {
   String _encodeCursor(RecordQuery query, int before) => base64Url.encode(
     utf8.encode(
       jsonEncode({
-        'v': 1,
+        'v': _cursorVersion,
         'scope': _cursorScope,
         'query': query.fingerprint,
         'before': before,
@@ -252,7 +256,7 @@ final class DriftDiagnosticStore implements DiagnosticStore {
     var deleted = 0;
     final uniqueIds = ids.toSet().toList();
     await _database.transaction(() async {
-      for (final idBatch in _chunks(uniqueIds, 500)) {
+      for (final idBatch in _chunks(uniqueIds, _idQueryBatchSize)) {
         deleted += await (_database.delete(
           _database.storedRecordRows,
         )..where((row) => row.recordId.isIn(idBatch))).go();

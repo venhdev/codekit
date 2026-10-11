@@ -61,7 +61,7 @@ class CodeKitHttpClient extends http.BaseClient {
           ),
         );
       } catch (_) {
-        // Capture failure must not replace the original HTTP error.
+        // Building the diagnostic input must not replace the HTTP error.
       }
       rethrow;
     }
@@ -85,7 +85,7 @@ class CodeKitHttpClient extends http.BaseClient {
         ),
       );
     } catch (_) {
-      // Capture failure must not replace the successful response.
+      // Building the diagnostic input must not replace the HTTP response.
     }
     return response;
   }
