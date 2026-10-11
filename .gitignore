@@ -1,0 +1,11 @@
+.agents/scratch/
+.agents/tasks/
+.agents/skills/
+skills-lock.json
+
+# FVM Version Cache
+.fvm/
+
+# Dart workspace artifacts
+.dart_tool/
+build/
