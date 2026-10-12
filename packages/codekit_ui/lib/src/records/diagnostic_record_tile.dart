@@ -9,6 +9,7 @@ class DiagnosticRecordTile extends StatelessWidget {
     required this.selected,
     required this.onSelect,
     required this.onOpen,
+    required this.onLongPress,
   });
 
   final DiagnosticRecord record;
@@ -16,6 +17,7 @@ class DiagnosticRecordTile extends StatelessWidget {
   final bool selected;
   final VoidCallback onSelect;
   final VoidCallback onOpen;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +25,8 @@ class DiagnosticRecordTile extends StatelessWidget {
     final time = TimeOfDay.fromDateTime(record.recordedAt.toLocal());
     final timestamp = time.format(context);
     return InkWell(
-      onTap: onOpen,
+      onTap: selectionMode ? onSelect : onOpen,
+      onLongPress: selectionMode ? null : onLongPress,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
         child: Row(

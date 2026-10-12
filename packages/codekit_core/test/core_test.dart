@@ -95,11 +95,14 @@ void main() {
     final d = CodeKitDiagnostics(retention: RetentionPolicy(maxRecords: 1));
     addTearDown(d.dispose);
     d.startTrace();
+    expect(d.activeTraceRecordCount, 0);
     final ids = <String>[];
     for (var i = 0; i < 101; i++) {
       ids.add(d.log(LogInput(message: '$i')).recordId!);
     }
+    expect(d.activeTraceRecordCount, 101);
     final session = (await d.stopTrace())!;
+    expect(d.activeTraceRecordCount, 0);
     expect(d.retention.maxRecords, 100);
     expect(session.recordIds.length, 101);
     expect((await d.query(RecordQuery())).records.length, 96);

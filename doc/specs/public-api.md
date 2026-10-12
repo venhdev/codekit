@@ -183,7 +183,7 @@ Main-screen search matches LOG message/source/error message and HTTP method/URI/
 
 ## Additional public operations
 
-The curated core library entrypoint exposes `log`, `createRecordId`, `shouldCaptureHttp`, get/query/delete/clear, manual and picker Trace operations, text exports, HTTP fragment formatting and dispose. Runtime changes use `recordMode`, `redactionPolicy` and `captureExcludeUriPatterns` setters; configuration does not require a separate settings/updateSettings abstraction.
+The curated core library entrypoint exposes `log`, `createRecordId`, `shouldCaptureHttp`, get/query/delete/clear, manual and picker Trace operations, `isTraceActive`, `activeTraceRecordCount`, text exports, HTTP fragment formatting and dispose. `activeTraceRecordCount` is zero while no manual Trace capture is active and otherwise reports IDs accepted into that active capture; it does not promise that every ID remains queryable. Runtime changes use `recordMode`, `redactionPolicy` and `captureExcludeUriPatterns` setters; configuration does not require a separate settings/updateSettings abstraction.
 
 `captureExcludeUriPatterns` is nullable (no exclusions). Adapters can check `shouldCaptureHttp(uri)` before collection; the log entrypoint also checks it before normalization and every output branch. Excluded HTTP inputs return an excluded receipt without emitting repeated warnings.
 

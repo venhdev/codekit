@@ -193,52 +193,62 @@ class _HttpTab extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
     padding: const EdgeInsets.all(16),
     children: [
-      Row(
+      ExpansionTile(
+        title: const Text('Headers'),
+        initiallyExpanded: false,
+        childrenPadding: const EdgeInsets.fromLTRB(0, 0, 0, 12),
         children: [
-          Text('Headers', style: Theme.of(context).textTheme.titleSmall),
-          const Spacer(),
           if (headers?.isNotEmpty ?? false)
-            TextButton(
-              onPressed: () => showHttpFragmentCopyDialog(
-                context,
-                diagnostics: diagnostics,
-                recordId: recordId,
-                fragment: HttpFragment.headers,
-                target: target,
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => showHttpFragmentCopyDialog(
+                  context,
+                  diagnostics: diagnostics,
+                  recordId: recordId,
+                  fragment: HttpFragment.headers,
+                  target: target,
+                ),
+                child: const Text('Copy headers'),
               ),
-              child: const Text('Copy headers'),
             ),
+          if (headers == null || headers!.isEmpty)
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('No headers captured'),
+            )
+          else
+            for (final entry in headers!.entries)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(entry.key),
+                subtitle: SelectableText(entry.value.join(', ')),
+              ),
         ],
       ),
-      if (headers == null || headers!.isEmpty)
-        const Text('No headers captured')
-      else
-        for (final entry in headers!.entries)
-          ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: Text(entry.key),
-            subtitle: SelectableText(entry.value.join(', ')),
-          ),
-      const SizedBox(height: 16),
-      Row(
+      ExpansionTile(
+        title: const Text('Body'),
+        initiallyExpanded: true,
+        childrenPadding: const EdgeInsets.fromLTRB(0, 0, 0, 12),
         children: [
-          Text('Body', style: Theme.of(context).textTheme.titleSmall),
-          const Spacer(),
           if (_hasCopyableBody(body))
-            TextButton(
-              onPressed: () => showHttpFragmentCopyDialog(
-                context,
-                diagnostics: diagnostics,
-                recordId: recordId,
-                fragment: HttpFragment.body,
-                target: target,
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => showHttpFragmentCopyDialog(
+                  context,
+                  diagnostics: diagnostics,
+                  recordId: recordId,
+                  fragment: HttpFragment.body,
+                  target: target,
+                ),
+                child: const Text('Copy body'),
               ),
-              child: const Text('Copy body'),
             ),
+          BodyInspector(body: body),
         ],
       ),
-      BodyInspector(body: body),
       if (recordContext != null) ...[
         const Divider(),
         Text('Context', style: Theme.of(context).textTheme.titleMedium),
@@ -278,7 +288,12 @@ class _BodyInspectorState extends State<BodyInspector> {
   Widget build(BuildContext context) {
     final body = widget.body;
     if (body == null || body.state != BodyCaptureState.captured) {
-      return Text('Body ${body?.state.name ?? 'absent'}');
+      return Text(switch (body?.state) {
+        BodyCaptureState.unsupported =>
+          'Body unavailable: the client did not capture a supported body.',
+        BodyCaptureState.disabled => 'Body capture was disabled.',
+        _ => 'No body captured.',
+      });
     }
     final data = body.data;
     final raw = data is String ? data : jsonEncode(data);

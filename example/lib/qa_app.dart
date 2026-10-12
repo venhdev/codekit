@@ -18,11 +18,35 @@ final class QaApp extends StatefulWidget {
 final class _QaAppState extends State<QaApp> {
   final navigatorKey = GlobalKey<NavigatorState>();
   late final QaActions actions;
+  late final CodeKitViewerSettings viewerSettings;
 
   @override
   void initState() {
     super.initState();
     actions = QaActions(widget.services);
+    viewerSettings = CodeKitViewerSettings(
+      allowRuntimeRecordModeChanges: true,
+      setupDetails: [
+        CodeKitViewerSetupDetail(
+          label: 'Storage',
+          value: widget.services.storageDescription,
+        ),
+        const CodeKitViewerSetupDetail(
+          label: 'Dio',
+          value: 'Interceptor attached',
+        ),
+        const CodeKitViewerSetupDetail(
+          label: 'package:http',
+          value: 'Wrapped; headers-only body',
+        ),
+        CodeKitViewerSetupDetail(
+          label: 'Flutter error hooks',
+          value: widget.services.errorHooks == null
+              ? 'Not installed'
+              : 'Installed',
+        ),
+      ],
+    );
   }
 
   @override
@@ -39,6 +63,7 @@ final class _QaAppState extends State<QaApp> {
     builder: (context, child) => CodeKitBubble(
       diagnostics: widget.services.diagnostics,
       navigatorKey: navigatorKey,
+      viewerSettings: viewerSettings,
       child: child!,
     ),
     home: _QaHome(
@@ -47,6 +72,7 @@ final class _QaAppState extends State<QaApp> {
         MaterialPageRoute<void>(
           builder: (_) => CodeKitDiagnosticsScreen(
             diagnostics: widget.services.diagnostics,
+            viewerSettings: viewerSettings,
           ),
         ),
       ),

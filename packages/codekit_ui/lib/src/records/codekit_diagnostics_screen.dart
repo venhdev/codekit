@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:codekit_core/codekit_core.dart';
 import 'package:flutter/material.dart';
 
@@ -5,6 +7,8 @@ import '../export/export_confirmation_dialog.dart';
 import '../record_details/record_details_screen.dart';
 import '../search_history/search_history_sheet.dart';
 import '../search_history/search_history_store.dart';
+import '../settings/codekit_viewer_settings.dart';
+import '../settings/diagnostics_settings_sheet.dart';
 import '../traces/trace_sessions_sheet.dart';
 import 'diagnostic_record_tile.dart';
 import 'filters_sheet.dart';
@@ -15,10 +19,12 @@ class CodeKitDiagnosticsScreen extends StatefulWidget {
     super.key,
     required this.diagnostics,
     this.searchHistory,
+    this.viewerSettings = const CodeKitViewerSettings(),
   });
 
   final CodeKitDiagnostics diagnostics;
   final SearchHistoryStore? searchHistory;
+  final CodeKitViewerSettings viewerSettings;
 
   @override
   State<CodeKitDiagnosticsScreen> createState() =>
@@ -33,6 +39,7 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
   bool _busy = false;
   bool _selectionMode = false;
   TraceSession? _traceSession;
+  Timer? _traceCountTimer;
 
   @override
   void initState() {
@@ -41,6 +48,7 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
     _controller = RecordsController(widget.diagnostics, _history);
     _controller.addListener(_refresh);
     _controller.reload();
+    _syncTraceCountTimer();
   }
 
   void _refresh() {
@@ -51,6 +59,7 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
   void dispose() {
     _controller.removeListener(_refresh);
     _controller.dispose();
+    _traceCountTimer?.cancel();
     if (widget.searchHistory == null) _history.dispose();
     _search.dispose();
     super.dispose();
@@ -75,7 +84,12 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
 
   Future<void> _traceSessions() async {
     final session = await showTraceSessionsSheet(context, widget.diagnostics);
-    if (session == null || !mounted) return;
+    if (!mounted) return;
+    _syncTraceCountTimer();
+    if (session == null) {
+      setState(() {});
+      return;
+    }
     setState(() => _traceSession = session);
     await _controller.setTraceScope(session.recordIds);
   }
@@ -89,6 +103,50 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
     _selectionMode = !_selectionMode;
     if (!_selectionMode) _controller.clearSelection();
   });
+
+  void _enterSelection(String id) {
+    _selectionMode = true;
+    _controller.toggleSelected(id);
+    setState(() {});
+  }
+
+  void _syncTraceCountTimer() {
+    _traceCountTimer?.cancel();
+    if (!widget.diagnostics.isTraceActive) return;
+    _traceCountTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || !widget.diagnostics.isTraceActive) {
+        _syncTraceCountTimer();
+        return;
+      }
+      setState(() {});
+    });
+  }
+
+  void _startTrace() {
+    try {
+      widget.diagnostics.startTrace();
+      _syncTraceCountTimer();
+      setState(() {});
+    } on StateError {
+      _message('Trace is already active');
+    }
+  }
+
+  Future<void> _stopTrace() async {
+    try {
+      final session = await widget.diagnostics.stopTrace();
+      _syncTraceCountTimer();
+      if (!mounted) return;
+      setState(() {});
+      _message(
+        session == null
+            ? 'Trace had no accepted records'
+            : 'Trace saved ${session.recordIds.length} IDs',
+      );
+    } on StateError {
+      _message('No active Trace');
+    }
+  }
 
   Future<void> _export({required bool allMatching}) async {
     if (_busy) return;
@@ -150,145 +208,117 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       leading: IconButton(
-        tooltip: 'Close CodeKit',
-        icon: const Icon(Icons.close),
-        onPressed: () => Navigator.maybePop(context),
+        tooltip: _selectionMode ? 'Close selection' : 'Back',
+        icon: Icon(_selectionMode ? Icons.close : Icons.arrow_back),
+        onPressed: _selectionMode
+            ? _toggleSelectionMode
+            : () => Navigator.maybePop(context),
       ),
-      title: const Text('CodeKit'),
+      title: Text(
+        _selectionMode
+            ? '${_controller.selectedIds.length} selected'
+            : 'CodeKit',
+      ),
       actions: [
-        IconButton(
-          tooltip: 'Trace sessions',
-          icon: const Icon(Icons.timeline),
-          onPressed: _traceSessions,
-        ),
-        IconButton(
-          tooltip: 'Filters',
-          icon: const Icon(Icons.tune),
-          onPressed: () => showModalBottomSheet<void>(
-            context: context,
-            isScrollControlled: true,
-            enableDrag: true,
-            showDragHandle: true,
-            builder: (_) => FiltersSheet(controller: _controller),
-          ),
-        ),
-        IconButton(
-          tooltip: 'Reload',
-          icon: const Icon(Icons.refresh),
-          onPressed: _controller.reload,
-        ),
-        if (_selectionMode)
-          TextButton(onPressed: _toggleSelectionMode, child: const Text('Done'))
-        else
+        if (!_selectionMode) ...[
           IconButton(
-            tooltip: 'Select records',
-            icon: const Icon(Icons.checklist),
-            onPressed: _toggleSelectionMode,
+            tooltip: 'Filters',
+            icon: const Icon(Icons.tune),
+            onPressed: () => showModalBottomSheet<void>(
+              context: context,
+              isScrollControlled: true,
+              enableDrag: true,
+              showDragHandle: true,
+              builder: (_) => FiltersSheet(controller: _controller),
+            ),
           ),
+          IconButton(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => showDiagnosticsSettingsSheet(
+              context,
+              diagnostics: widget.diagnostics,
+              settings: widget.viewerSettings,
+            ),
+          ),
+        ],
       ],
     ),
     body: Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _search,
-                  textInputAction: TextInputAction.search,
-                  onSubmitted: (_) => _submit(),
-                  decoration: InputDecoration(
-                    hintText: 'Search records',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: IconButton(
-                      tooltip: _regex
-                          ? 'Regex search enabled'
-                          : 'Text search enabled',
-                      icon: Text(_regex ? '.*' : 'abc'),
-                      onPressed: () => setState(() => _regex = !_regex),
-                    ),
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Search history',
-                icon: const Icon(Icons.history),
-                onPressed: _historySheet,
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
+        if (!_selectionMode)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+            child: Row(
               children: [
-                Text(
-                  _selectionMode
-                      ? '${_controller.matchingLabel} · ${_controller.selectedIds.length} selected'
-                      : _controller.matchingLabel,
-                ),
-                if (_traceSession != null)
-                  InputChip(
-                    label: Text(
-                      'Trace: ${_traceSession!.name ?? _traceSession!.id}',
+                Expanded(
+                  child: TextField(
+                    controller: _search,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) => _submit(),
+                    decoration: InputDecoration(
+                      hintText: 'Search records',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: IconButton(
+                        tooltip: _regex
+                            ? 'Regex search enabled'
+                            : 'Text search enabled',
+                        icon: Text(_regex ? '.*' : 'abc'),
+                        onPressed: () => setState(() => _regex = !_regex),
+                      ),
                     ),
-                    onDeleted: _clearTraceScope,
                   ),
+                ),
+                IconButton(
+                  tooltip: 'Search history',
+                  icon: const Icon(Icons.history),
+                  onPressed: _historySheet,
+                ),
+                IconButton(
+                  tooltip: 'Reload',
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _controller.reload,
+                ),
               ],
             ),
           ),
-        ),
-        Expanded(
-          child: _controller.error != null
-              ? Center(child: Text(_controller.error!))
-              : NotificationListener<ScrollNotification>(
-                  onNotification: (notification) {
-                    if (notification.metrics.extentAfter < 300 &&
-                        _controller.hasMore &&
-                        !_controller.loading) {
-                      _controller.loadMore();
-                    }
-                    return false;
-                  },
-                  child: ListView.separated(
-                    itemCount:
-                        _controller.records.length +
-                        (_controller.loading ? 1 : 0),
-                    separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      if (index == _controller.records.length) {
-                        return const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: CircularProgressIndicator(),
-                          ),
-                        );
-                      }
-                      final record = _controller.records[index];
-                      return DiagnosticRecordTile(
-                        record: record,
-                        selectionMode: _selectionMode,
-                        selected: _controller.selectedIds.contains(record.id),
-                        onSelect: () => _controller.toggleSelected(record.id),
-                        onOpen: () => Navigator.push<void>(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => RecordDetailsScreen(
-                              diagnostics: widget.diagnostics,
-                              record: record,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            children: [
+              Text(
+                _selectionMode
+                    ? '${_controller.selectedIds.length} selected'
+                    : _controller.matchingLabel,
+              ),
+              if (_traceSession != null && !_selectionMode)
+                InputChip(
+                  label: Text(
+                    'Trace: ${_traceSession!.name ?? _traceSession!.id}',
                   ),
+                  onDeleted: _clearTraceScope,
                 ),
+              if (_selectionMode && widget.diagnostics.isTraceActive)
+                Chip(
+                  label: Text(
+                    'Trace · ${widget.diagnostics.activeTraceRecordCount} IDs',
+                  ),
+                )
+              else if (!_selectionMode)
+                _TraceControl(
+                  active: widget.diagnostics.isTraceActive,
+                  count: widget.diagnostics.activeTraceRecordCount,
+                  onOpenSessions: _traceSessions,
+                  onToggle: widget.diagnostics.isTraceActive
+                      ? _stopTrace
+                      : _startTrace,
+                ),
+            ],
+          ),
         ),
+        Expanded(child: _recordsList()),
       ],
     ),
     bottomNavigationBar: !_selectionMode
@@ -320,5 +350,94 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
               ),
             ),
           ),
+  );
+
+  Widget _recordsList() {
+    final list = _controller.error != null
+        ? Center(child: Text(_controller.error!))
+        : NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification.metrics.extentAfter < 300 &&
+                  _controller.hasMore &&
+                  !_controller.loading) {
+                _controller.loadMore();
+              }
+              return false;
+            },
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount:
+                  _controller.records.length + (_controller.loading ? 1 : 0),
+              separatorBuilder: (_, _) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                if (index == _controller.records.length) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
+                final record = _controller.records[index];
+                return DiagnosticRecordTile(
+                  record: record,
+                  selectionMode: _selectionMode,
+                  selected: _controller.selectedIds.contains(record.id),
+                  onSelect: () => _controller.toggleSelected(record.id),
+                  onLongPress: () => _enterSelection(record.id),
+                  onOpen: () => Navigator.push<void>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => RecordDetailsScreen(
+                        diagnostics: widget.diagnostics,
+                        record: record,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          );
+    return _selectionMode
+        ? list
+        : RefreshIndicator(onRefresh: _controller.reload, child: list);
+  }
+}
+
+class _TraceControl extends StatelessWidget {
+  const _TraceControl({
+    required this.active,
+    required this.count,
+    required this.onOpenSessions,
+    required this.onToggle,
+  });
+
+  final bool active;
+  final int count;
+  final VoidCallback onOpenSessions;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onOpenSessions,
+        child: Chip(
+          avatar: Icon(
+            active ? Icons.fiber_manual_record : Icons.radio_button_unchecked,
+            color: active ? Theme.of(context).colorScheme.error : null,
+            size: 16,
+          ),
+          label: Text(active ? 'Trace · $count IDs' : 'Trace off'),
+        ),
+      ),
+      IconButton(
+        tooltip: active ? 'Stop Trace' : 'Start Trace',
+        icon: Icon(active ? Icons.stop : Icons.play_arrow),
+        onPressed: onToggle,
+      ),
+    ],
   );
 }

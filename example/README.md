@@ -13,6 +13,16 @@ The QA controls cover:
 - Optional Discord and Telegram sinks when credentials are supplied through
   `--dart-define`.
 
+The viewer Settings sheet shows the active integration setup and allows this QA
+app to switch future records between Store raw and Redact before recording.
+The configured redaction policy masks `authorization`, cookie headers,
+`x-qa-secret`, and JSON body fields `password`, `token` and `secret` when
+redact-before-recording is active. Existing records are never rewritten.
+
+`package:http` records response headers but intentionally leaves response body
+as unsupported so the wrapper does not consume the application's response
+stream. Use the Dio scenarios to QA captured response bodies.
+
 Run dependency resolution and static checks from the workspace root:
 
 ```sh

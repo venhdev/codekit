@@ -18,13 +18,22 @@ final class QaServices {
     required this.dio,
     required this.httpClient,
     required this.errorHooks,
+    required this.storageDescription,
   });
 
   final kit.CodeKitDiagnostics diagnostics;
   final Dio dio;
   final http.Client httpClient;
   final CodeKitFlutterErrorHooks? errorHooks;
+  final String storageDescription;
   bool _closed = false;
+
+  static final kit.RedactionPolicy _redactionPolicy = kit.RedactionPolicy(
+    rules: [
+      kit.HeaderRedactionRule(const ['x-qa-secret']),
+      kit.BodyFieldRedactionRule(const ['password', 'token', 'secret']),
+    ],
+  );
 
   static Future<QaServices> create() async {
     final directory = await getApplicationDocumentsDirectory();
@@ -33,14 +42,11 @@ final class QaServices {
     ];
     _addConfiguredWebhooks(sinks);
 
+    final databasePath = path.join(directory.path, 'codekit_qa.sqlite');
     final diagnostics = await createDriftDiagnostics(
-      databasePath: path.join(directory.path, 'codekit_qa.sqlite'),
+      databasePath: databasePath,
       retention: kit.RetentionPolicy(maxRecords: 1000),
-      redactionPolicy: kit.RedactionPolicy(
-        rules: [
-          kit.BodyFieldRedactionRule(const ['password', 'token', 'secret']),
-        ],
-      ),
+      redactionPolicy: _redactionPolicy,
       sinks: sinks,
       onWarning: (warning) =>
           debugPrint('[CodeKit warning] ${warning.code}: ${warning.message}'),
@@ -59,17 +65,21 @@ final class QaServices {
       ).withDiagnostics(diagnostics),
       httpClient: http.Client().withDiagnostics(diagnostics),
       errorHooks: hooks,
+      storageDescription: 'Drift (persistent)',
     );
   }
 
   /// Uses memory storage so the widget smoke test does not touch a device file.
   factory QaServices.forTest() {
-    final diagnostics = kit.CodeKitDiagnostics();
+    final diagnostics = kit.CodeKitDiagnostics(
+      redactionPolicy: _redactionPolicy,
+    );
     return QaServices._(
       diagnostics: diagnostics,
       dio: Dio().withDiagnostics(diagnostics),
       httpClient: http.Client().withDiagnostics(diagnostics),
       errorHooks: null,
+      storageDescription: 'Memory (test)',
     );
   }
 

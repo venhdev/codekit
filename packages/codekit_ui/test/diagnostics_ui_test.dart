@@ -34,11 +34,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Payment failed'), findsOneWidget);
     expect(find.byType(Checkbox), findsNothing);
-    await tester.tap(find.byTooltip('Select records'));
+    await tester.longPress(find.text('Payment failed'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(Checkbox).first);
-    await tester.pump();
-    expect(find.textContaining('1 selected'), findsOneWidget);
+    expect(find.byType(Checkbox), findsOneWidget);
+    expect(find.textContaining('1 selected'), findsWidgets);
     await tester.tap(find.text('Export selected'));
     await tester.pumpAndSettle();
     expect(find.text('Confirm export'), findsOneWidget);
@@ -83,6 +82,15 @@ void main() {
     );
     await tester.tap(find.text('Open export'));
     await tester.pumpAndSettle();
+    final copy = find.widgetWithText(OutlinedButton, 'COPY');
+    final share = find.widgetWithText(FilledButton, 'SHARE');
+    expect(copy, findsOneWidget);
+    expect(share, findsOneWidget);
+    expect(tester.getSize(copy).width, tester.getSize(share).width);
+    expect(
+      tester.getTopLeft(find.text('Share as file (.txt)')).dy,
+      greaterThan(tester.getBottomRight(share).dy),
+    );
     await tester.tap(find.text('COPY'));
     await tester.pumpAndSettle();
     expect(copied, 'redacted');
@@ -116,6 +124,45 @@ void main() {
     },
   );
 
+  testWidgets('settings exposes opt-in record mode and read-only setup', (
+    tester,
+  ) async {
+    final diagnostics = CodeKitDiagnostics(
+      redactionPolicy: RedactionPolicy(
+        rules: [
+          HeaderRedactionRule(['x-qa-secret']),
+          BodyFieldRedactionRule(['password']),
+        ],
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CodeKitDiagnosticsScreen(
+          diagnostics: diagnostics,
+          viewerSettings: const CodeKitViewerSettings(
+            allowRuntimeRecordModeChanges: true,
+            setupDetails: [
+              CodeKitViewerSetupDetail(
+                label: 'Storage',
+                value: 'Drift (persistent)',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.text('Drift (persistent)'), findsWidgets);
+    expect(find.text('Headers: x-qa-secret'), findsOneWidget);
+    expect(find.text('Body fields: password'), findsOneWidget);
+    await tester.tap(find.text('Redact before recording'));
+    await tester.pumpAndSettle();
+    expect(diagnostics.recordMode, RecordMode.redactBeforeRecording);
+    await diagnostics.dispose();
+  });
+
   testWidgets('manual Trace capture survives closing and reopening the sheet', (
     tester,
   ) async {
@@ -124,19 +171,16 @@ void main() {
       MaterialApp(home: CodeKitDiagnosticsScreen(diagnostics: diagnostics)),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Trace sessions'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Start capture'));
+    await tester.tap(find.byTooltip('Start Trace'));
     await tester.pumpAndSettle();
     await diagnostics
         .log(const LogInput(message: 'Within trace'))
         .persistedOrNull();
-    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Trace · 1 IDs'), findsOneWidget);
+    await tester.tap(find.byTooltip('Stop Trace'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Trace sessions'));
-    await tester.pumpAndSettle();
-    expect(find.text('Stop capture'), findsOneWidget);
-    await tester.tap(find.text('Stop capture'));
+    await tester.tap(find.text('Trace off'));
     await tester.pumpAndSettle();
     expect(find.text('1 saved IDs'), findsOneWidget);
     await diagnostics.dispose();
@@ -150,18 +194,18 @@ void main() {
         MaterialApp(home: CodeKitDiagnosticsScreen(diagnostics: diagnostics)),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Trace sessions'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Start capture'));
+      await tester.tap(find.byTooltip('Start Trace'));
       await tester.pumpAndSettle();
       await diagnostics
           .log(const LogInput(message: 'Captured by trace'))
           .persistedOrNull();
-      await tester.tap(find.text('Stop capture'));
+      await tester.tap(find.byTooltip('Stop Trace'));
       await tester.pumpAndSettle();
       await diagnostics
           .log(const LogInput(message: 'Outside trace'))
           .persistedOrNull();
+      await tester.tap(find.text('Trace off'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('1 saved IDs'));
       await tester.pumpAndSettle();
       expect(find.text('Captured by trace'), findsOneWidget);
@@ -199,6 +243,18 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('Status: 201'), findsOneWidget);
       expect(find.text('Response'), findsOneWidget);
+      expect(
+        tester
+            .widget<ExpansionTile>(find.byType(ExpansionTile).first)
+            .initiallyExpanded,
+        isFalse,
+      );
+      expect(
+        tester
+            .widget<ExpansionTile>(find.byType(ExpansionTile).at(1))
+            .initiallyExpanded,
+        isTrue,
+      );
       await tester.tap(find.text('Request'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Tree'));

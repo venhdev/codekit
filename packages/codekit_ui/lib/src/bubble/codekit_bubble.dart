@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../records/codekit_diagnostics_screen.dart';
 import '../search_history/search_history_store.dart';
+import '../settings/codekit_viewer_settings.dart';
 
 /// Place in MaterialApp.builder with the same navigatorKey as MaterialApp.
 class CodeKitBubble extends StatefulWidget {
@@ -13,12 +14,14 @@ class CodeKitBubble extends StatefulWidget {
     required this.navigatorKey,
     required this.diagnostics,
     this.debugOnly = false,
+    this.viewerSettings = const CodeKitViewerSettings(),
   });
 
   final Widget child;
   final GlobalKey<NavigatorState> navigatorKey;
   final CodeKitDiagnostics diagnostics;
   final bool debugOnly;
+  final CodeKitViewerSettings viewerSettings;
 
   @override
   State<CodeKitBubble> createState() => _CodeKitBubbleState();
@@ -45,6 +48,7 @@ class _CodeKitBubbleState extends State<CodeKitBubble> {
           builder: (_) => CodeKitDiagnosticsScreen(
             diagnostics: widget.diagnostics,
             searchHistory: _history,
+            viewerSettings: widget.viewerSettings,
           ),
         ),
       );

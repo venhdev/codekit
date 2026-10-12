@@ -78,56 +78,59 @@ class _ExportConfirmationState extends State<_ExportConfirmation> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Confirm export'),
-    content: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (widget.selectedCount != null)
-          Text('${widget.selectedCount} records selected'),
-        RadioGroup<ExportRepresentation>(
-          groupValue: representation,
-          onChanged: busy
-              ? (_) {}
-              : (value) {
-                  if (value != null) setState(() => representation = value);
-                },
-          child: const Column(
-            children: [
-              RadioListTile<ExportRepresentation>(
-                title: Text('Redacted'),
-                value: ExportRepresentation.redacted,
-              ),
-              RadioListTile<ExportRepresentation>(
-                title: Text('As stored'),
-                value: ExportRepresentation.asStored,
-              ),
-            ],
-          ),
-        ),
-        if (error != null)
-          Text(
-            error!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
-      ],
-    ),
-    actions: [
-      TextButton(
-        onPressed: busy ? null : () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      TextButton(
-        onPressed: busy ? null : () => _run(share: false),
-        child: const Text('COPY'),
-      ),
-      Column(
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return AlertDialog(
+      title: const Text('Confirm export'),
+      content: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextButton(
+          if (widget.selectedCount != null)
+            Text('${widget.selectedCount} records selected'),
+          RadioGroup<ExportRepresentation>(
+            groupValue: representation,
+            onChanged: busy
+                ? (_) {}
+                : (value) {
+                    if (value != null) {
+                      setState(() => representation = value);
+                    }
+                  },
+            child: const Column(
+              children: [
+                RadioListTile<ExportRepresentation>(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Redacted'),
+                  value: ExportRepresentation.redacted,
+                ),
+                RadioListTile<ExportRepresentation>(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('As stored'),
+                  value: ExportRepresentation.asStored,
+                ),
+              ],
+            ),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 8),
+            Text(error!, style: TextStyle(color: colors.error)),
+          ],
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: busy ? null : () => _run(share: false),
+            style: OutlinedButton.styleFrom(
+              backgroundColor: colors.secondaryContainer,
+              foregroundColor: colors.onSecondaryContainer,
+            ),
+            icon: const Icon(Icons.copy_outlined),
+            label: const Text('COPY'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
             onPressed: busy ? null : () => _run(share: true),
-            child: const Text('SHARE'),
+            icon: const Icon(Icons.share_outlined),
+            label: const Text('SHARE'),
           ),
           CheckboxListTile(
             dense: true,
@@ -140,6 +143,12 @@ class _ExportConfirmationState extends State<_ExportConfirmation> {
           ),
         ],
       ),
-    ],
-  );
+      actions: [
+        TextButton(
+          onPressed: busy ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
 }
