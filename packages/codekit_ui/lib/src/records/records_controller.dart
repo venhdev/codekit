@@ -23,9 +23,11 @@ class RecordsController extends ChangeNotifier {
   bool loading = false;
   bool hasMore = true;
   String? _cursor;
+  List<String>? _traceRecordIds;
   int _generation = 0;
 
   String get matchingLabel => '${records.length}${hasMore ? '+' : ''} matching';
+  bool get hasTraceScope => _traceRecordIds != null;
 
   RecordQuery _query({String? cursor}) => RecordQuery(
     cursor: cursor,
@@ -47,7 +49,31 @@ class RecordsController extends ChangeNotifier {
     loading = false;
     error = null;
     notifyListeners();
+    if (_traceRecordIds != null) {
+      await _loadTraceScope(_generation);
+      return;
+    }
     await loadMore();
+  }
+
+  Future<void> _loadTraceScope(int generation) async {
+    loading = true;
+    notifyListeners();
+    try {
+      final saved = await diagnostics.getByIds(_traceRecordIds!);
+      if (generation != _generation) return;
+      final query = _query();
+      records = List.unmodifiable(saved.where(query.matches));
+      hasMore = false;
+      error = null;
+    } catch (_) {
+      if (generation == _generation) error = 'Could not load Trace session';
+    } finally {
+      if (generation == _generation) {
+        loading = false;
+        notifyListeners();
+      }
+    }
   }
 
   Future<void> loadMore() async {
@@ -110,8 +136,28 @@ class RecordsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearSelection() {
+    if (selectedIds.isEmpty) return;
+    selectedIds.clear();
+    notifyListeners();
+  }
+
+  Future<void> setTraceScope(Iterable<String> recordIds) async {
+    _traceRecordIds = List.unmodifiable(recordIds.toSet());
+    await reload();
+  }
+
+  Future<void> clearTraceScope() async {
+    if (_traceRecordIds == null) return;
+    _traceRecordIds = null;
+    await reload();
+  }
+
   /// Resolves every match only for an explicit all-matching export.
   Future<List<String>> allMatchingIds() async {
+    if (_traceRecordIds != null) {
+      return records.map((record) => record.id).toList();
+    }
     final ids = <String>[];
     String? cursor;
     do {

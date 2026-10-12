@@ -5,12 +5,14 @@ class DiagnosticRecordTile extends StatelessWidget {
   const DiagnosticRecordTile({
     super.key,
     required this.record,
+    required this.selectionMode,
     required this.selected,
     required this.onSelect,
     required this.onOpen,
   });
 
   final DiagnosticRecord record;
+  final bool selectionMode;
   final bool selected;
   final VoidCallback onSelect;
   final VoidCallback onOpen;
@@ -27,11 +29,13 @@ class DiagnosticRecordTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Tooltip(
-              message: 'Select record ${record.id}',
-              child: Checkbox(value: selected, onChanged: (_) => onSelect()),
-            ),
-            const SizedBox(width: 4),
+            if (selectionMode) ...[
+              Tooltip(
+                message: 'Select record ${record.id}',
+                child: Checkbox(value: selected, onChanged: (_) => onSelect()),
+              ),
+              const SizedBox(width: 4),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

@@ -33,6 +33,9 @@ void main() {
     await tester.tap(find.byIcon(Icons.bug_report_outlined));
     await tester.pumpAndSettle();
     expect(find.text('Payment failed'), findsOneWidget);
+    expect(find.byType(Checkbox), findsNothing);
+    await tester.tap(find.byTooltip('Select records'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byType(Checkbox).first);
     await tester.pump();
     expect(find.textContaining('1 selected'), findsOneWidget);
@@ -98,6 +101,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Filters'));
       await tester.pumpAndSettle();
+      expect(find.byTooltip('Close sheet'), findsOneWidget);
       expect(find.text('1xx'), findsOneWidget);
       expect(find.text('Unknown'), findsOneWidget);
       await tester.tap(find.text('Done'));
@@ -139,6 +143,35 @@ void main() {
   });
 
   testWidgets(
+    'tapping a Trace session scopes the records list to its saved IDs',
+    (tester) async {
+      final diagnostics = CodeKitDiagnostics();
+      await tester.pumpWidget(
+        MaterialApp(home: CodeKitDiagnosticsScreen(diagnostics: diagnostics)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Trace sessions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Start capture'));
+      await tester.pumpAndSettle();
+      await diagnostics
+          .log(const LogInput(message: 'Captured by trace'))
+          .persistedOrNull();
+      await tester.tap(find.text('Stop capture'));
+      await tester.pumpAndSettle();
+      await diagnostics
+          .log(const LogInput(message: 'Outside trace'))
+          .persistedOrNull();
+      await tester.tap(find.text('1 saved IDs'));
+      await tester.pumpAndSettle();
+      expect(find.text('Captured by trace'), findsOneWidget);
+      expect(find.text('Outside trace'), findsNothing);
+      expect(find.textContaining('Trace:'), findsOneWidget);
+      await diagnostics.dispose();
+    },
+  );
+
+  testWidgets(
     'HTTP details expose captured JSON tree and fragment copy choice',
     (tester) async {
       final diagnostics = CodeKitDiagnostics();
@@ -165,6 +198,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.textContaining('Status: 201'), findsOneWidget);
+      expect(find.text('Response'), findsOneWidget);
       await tester.tap(find.text('Request'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Tree'));
@@ -174,6 +208,38 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Redacted'), findsOneWidget);
       expect(find.text('As stored'), findsOneWidget);
+      await diagnostics.dispose();
+    },
+  );
+
+  testWidgets(
+    'empty HTTP fragments hide copy actions and metadata opens on demand',
+    (tester) async {
+      final diagnostics = CodeKitDiagnostics();
+      await diagnostics
+          .log(
+            HttpInput(
+              recordId: diagnostics.createRecordId(),
+              requestStartedAt: DateTime.now(),
+              method: 'GET',
+              uri: Uri.parse('https://example.test/empty'),
+              response: const HttpResponseSnapshot(statusCode: 204),
+            ),
+          )
+          .persistedOrNull();
+      await tester.pumpWidget(
+        MaterialApp(home: CodeKitDiagnosticsScreen(diagnostics: diagnostics)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('GET https://example.test/empty'));
+      await tester.pumpAndSettle();
+      expect(find.text('Copy headers'), findsNothing);
+      expect(find.text('Copy body'), findsNothing);
+      expect(find.textContaining('ID:'), findsNothing);
+      await tester.tap(find.byTooltip('Record information'));
+      await tester.pumpAndSettle();
+      expect(find.text('Record information'), findsOneWidget);
+      expect(find.textContaining('ID:'), findsOneWidget);
       await diagnostics.dispose();
     },
   );

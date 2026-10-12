@@ -2,14 +2,14 @@ import 'package:codekit_core/codekit_core.dart';
 import 'package:flutter/material.dart';
 
 import '../export/export_confirmation_dialog.dart';
+import '../shared/codekit_bottom_sheet.dart';
 
-Future<void> showTraceSessionsSheet(
+Future<TraceSession?> showTraceSessionsSheet(
   BuildContext context,
   CodeKitDiagnostics diagnostics,
-) => showModalBottomSheet<void>(
-  context: context,
-  isScrollControlled: true,
-  builder: (_) => _TraceSessionsSheet(diagnostics: diagnostics),
+) => showCodeKitBottomSheet<TraceSession>(
+  context,
+  body: _TraceSessionsSheet(diagnostics: diagnostics),
 );
 
 class _TraceSessionsSheet extends StatefulWidget {
@@ -244,78 +244,75 @@ class _TraceSessionsSheetState extends State<_TraceSessionsSheet> {
   }
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    height: MediaQuery.sizeOf(context).height * .55,
-    child: SafeArea(
-      child: Column(
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(
         children: [
-          ListTile(
-            title: const Text('Trace sessions'),
-            trailing: TextButton.icon(
-              onPressed: _loading ? null : _create,
-              icon: const Icon(Icons.add),
-              label: const Text('Create'),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: _toggleTrace,
-                icon: Icon(_active ? Icons.stop : Icons.fiber_manual_record),
-                label: Text(_active ? 'Stop capture' : 'Start capture'),
-              ),
-            ),
-          ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _sessions.isEmpty
-                ? const Center(child: Text('No Trace sessions'))
-                : ListView.builder(
-                    itemCount: _sessions.length,
-                    itemBuilder: (context, index) {
-                      final session = _sessions[index];
-                      return ListTile(
-                        title: Text(
-                          session.name ??
-                              '${session.from.toLocal()} – ${session.to.toLocal()}',
-                        ),
-                        subtitle: Text('${session.recordIds.length} saved IDs'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            TextButton(
-                              onPressed: () => _export(session),
-                              child: const Text('Export'),
-                            ),
-                            PopupMenuButton<String>(
-                              tooltip: 'Trace session actions',
-                              onSelected: (_) => _deleteSession(session),
-                              itemBuilder: (_) => const [
-                                PopupMenuItem(
-                                  value: 'delete',
-                                  child: Text('Delete'),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+          Text('Trace sessions', style: Theme.of(context).textTheme.titleLarge),
+          const Spacer(),
+          TextButton.icon(
+            onPressed: _loading ? null : _create,
+            icon: const Icon(Icons.add),
+            label: const Text('Create'),
           ),
         ],
       ),
-    ),
+      const SizedBox(height: 8),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          onPressed: _toggleTrace,
+          icon: Icon(_active ? Icons.stop : Icons.fiber_manual_record),
+          label: Text(_active ? 'Stop capture' : 'Start capture'),
+        ),
+      ),
+      if (_error != null)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            _error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ),
+      const SizedBox(height: 8),
+      if (_loading)
+        const Padding(
+          padding: EdgeInsets.all(32),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else if (_sessions.isEmpty)
+        const Padding(
+          padding: EdgeInsets.all(32),
+          child: Center(child: Text('No Trace sessions')),
+        )
+      else
+        for (final session in _sessions)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(
+              session.name ??
+                  '${session.from.toLocal()} – ${session.to.toLocal()}',
+            ),
+            subtitle: Text('${session.recordIds.length} saved IDs'),
+            onTap: () => Navigator.of(context).pop(session),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextButton(
+                  onPressed: () => _export(session),
+                  child: const Text('Export'),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'Trace session actions',
+                  onSelected: (_) => _deleteSession(session),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  ],
+                ),
+              ],
+            ),
+          ),
+    ],
   );
 }

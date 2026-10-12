@@ -25,115 +25,189 @@ class RecordDetailsScreen extends StatelessWidget {
               ? 'HTTP ${payload.method} ${payload.uri.path}'
               : 'Log details',
         ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          SelectableText('ID: ${record.id}'),
-          Text('Recorded: ${record.recordedAt.toLocal()}'),
-          Text('Record mode: ${record.recordMode.name}'),
-          if (record.source != null) Text('Source: ${record.source}'),
-          if (payload is LogPayload) ...[
-            const Divider(),
-            Text(
-              payload.level.name.toUpperCase(),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            SelectableText(payload.message),
-            if (payload.error != null)
-              SelectableText(
-                '${payload.error!.type}: ${payload.error!.message}',
+        actions: [
+          IconButton(
+            tooltip: 'Record information',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Record information'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SelectableText('ID: ${record.id}'),
+                    Text('Recorded: ${record.recordedAt.toLocal()}'),
+                    Text('Record mode: ${record.recordMode.name}'),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Close'),
+                  ),
+                ],
               ),
-            if (payload.stackTrace != null) SelectableText(payload.stackTrace!),
-            if (payload.error?.stackTrace != null)
-              SelectableText(payload.error!.stackTrace!),
-          ],
-          if (payload is HttpPayload) ...[
-            const Divider(),
-            SelectableText('${payload.method} ${payload.uri}'),
-            Text('Status: ${payload.response?.statusCode ?? 'Unknown'}'),
-            Text(
-              'Duration: ${payload.duration?.inMilliseconds ?? 'Unknown'} ms',
             ),
-            Text('Started: ${payload.requestStartedAt.toLocal()}'),
-            if (payload.error != null)
-              SelectableText('Error: ${payload.error!.message}'),
-            TextButton.icon(
-              onPressed: () => showHttpFragmentCopyDialog(
-                context,
-                diagnostics: diagnostics,
-                recordId: record.id,
-                fragment: HttpFragment.curl,
-              ),
-              icon: const Icon(Icons.copy),
-              label: const Text('Copy cURL'),
-            ),
-            _HttpSection(
-              title: 'Request',
-              recordId: record.id,
-              diagnostics: diagnostics,
-              target: HeaderTarget.request,
-              headers: payload.requestHeaders,
-              body: payload.requestBody,
-            ),
-            _HttpSection(
-              title: 'Response',
-              recordId: record.id,
-              diagnostics: diagnostics,
-              target: HeaderTarget.response,
-              headers: payload.response?.headers,
-              body: payload.response?.body,
-            ),
-          ],
-          if (record.context != null) ...[
-            const Divider(),
-            Text('Context', style: Theme.of(context).textTheme.titleMedium),
-            SelectableText(
-              const JsonEncoder.withIndent('  ').convert(record.context),
-            ),
-          ],
+          ),
         ],
       ),
+      body: payload is HttpPayload
+          ? _HttpDetails(
+              diagnostics: diagnostics,
+              record: record,
+              payload: payload,
+            )
+          : _LogDetails(record: record, payload: payload as LogPayload),
     );
   }
 }
 
-class _HttpSection extends StatelessWidget {
-  const _HttpSection({
-    required this.title,
+class _LogDetails extends StatelessWidget {
+  const _LogDetails({required this.record, required this.payload});
+
+  final DiagnosticRecord record;
+  final LogPayload payload;
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.all(16),
+    children: [
+      if (record.source != null) Text('Source: ${record.source}'),
+      Text(
+        payload.level.name.toUpperCase(),
+        style: Theme.of(context).textTheme.titleMedium,
+      ),
+      SelectableText(payload.message),
+      if (payload.error != null)
+        SelectableText('${payload.error!.type}: ${payload.error!.message}'),
+      if (payload.stackTrace != null) SelectableText(payload.stackTrace!),
+      if (payload.error?.stackTrace != null)
+        SelectableText(payload.error!.stackTrace!),
+      if (record.context != null) ...[
+        const Divider(),
+        Text('Context', style: Theme.of(context).textTheme.titleMedium),
+        SelectableText(
+          const JsonEncoder.withIndent('  ').convert(record.context),
+        ),
+      ],
+    ],
+  );
+}
+
+class _HttpDetails extends StatelessWidget {
+  const _HttpDetails({
+    required this.diagnostics,
+    required this.record,
+    required this.payload,
+  });
+
+  final CodeKitDiagnostics diagnostics;
+  final DiagnosticRecord record;
+  final HttpPayload payload;
+
+  @override
+  Widget build(BuildContext context) => DefaultTabController(
+    length: 2,
+    child: Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SelectableText('${payload.method} ${payload.uri}'),
+              Text('Status: ${payload.response?.statusCode ?? 'Unknown'}'),
+              Text(
+                'Duration: ${payload.duration?.inMilliseconds ?? 'Unknown'} ms',
+              ),
+              Text('Started: ${payload.requestStartedAt.toLocal()}'),
+              if (record.source != null) Text('Source: ${record.source}'),
+              if (payload.error != null)
+                SelectableText('Error: ${payload.error!.message}'),
+              TextButton.icon(
+                onPressed: () => showHttpFragmentCopyDialog(
+                  context,
+                  diagnostics: diagnostics,
+                  recordId: record.id,
+                  fragment: HttpFragment.curl,
+                ),
+                icon: const Icon(Icons.copy),
+                label: const Text('Copy cURL'),
+              ),
+            ],
+          ),
+        ),
+        const TabBar(
+          tabs: [
+            Tab(text: 'Request'),
+            Tab(text: 'Response'),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            children: [
+              _HttpTab(
+                recordId: record.id,
+                diagnostics: diagnostics,
+                target: HeaderTarget.request,
+                headers: payload.requestHeaders,
+                body: payload.requestBody,
+                recordContext: record.context,
+              ),
+              _HttpTab(
+                recordId: record.id,
+                diagnostics: diagnostics,
+                target: HeaderTarget.response,
+                headers: payload.response?.headers,
+                body: payload.response?.body,
+                recordContext: record.context,
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _HttpTab extends StatelessWidget {
+  const _HttpTab({
     required this.recordId,
     required this.diagnostics,
     required this.target,
     required this.headers,
     required this.body,
+    required this.recordContext,
   });
 
-  final String title;
   final String recordId;
   final CodeKitDiagnostics diagnostics;
   final HeaderTarget target;
   final Map<String, List<String>>? headers;
   final BodySnapshot? body;
+  final Map<String, Object?>? recordContext;
 
   @override
-  Widget build(BuildContext context) => ExpansionTile(
-    title: Text(title),
-    childrenPadding: const EdgeInsets.all(12),
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.all(16),
     children: [
       Row(
         children: [
           Text('Headers', style: Theme.of(context).textTheme.titleSmall),
           const Spacer(),
-          TextButton(
-            onPressed: () => showHttpFragmentCopyDialog(
-              context,
-              diagnostics: diagnostics,
-              recordId: recordId,
-              fragment: HttpFragment.headers,
-              target: target,
+          if (headers?.isNotEmpty ?? false)
+            TextButton(
+              onPressed: () => showHttpFragmentCopyDialog(
+                context,
+                diagnostics: diagnostics,
+                recordId: recordId,
+                fragment: HttpFragment.headers,
+                target: target,
+              ),
+              child: const Text('Copy headers'),
             ),
-            child: const Text('Copy headers'),
-          ),
         ],
       ),
       if (headers == null || headers!.isEmpty)
@@ -142,28 +216,48 @@ class _HttpSection extends StatelessWidget {
         for (final entry in headers!.entries)
           ListTile(
             dense: true,
+            contentPadding: EdgeInsets.zero,
             title: Text(entry.key),
             subtitle: SelectableText(entry.value.join(', ')),
           ),
+      const SizedBox(height: 16),
       Row(
         children: [
           Text('Body', style: Theme.of(context).textTheme.titleSmall),
           const Spacer(),
-          TextButton(
-            onPressed: () => showHttpFragmentCopyDialog(
-              context,
-              diagnostics: diagnostics,
-              recordId: recordId,
-              fragment: HttpFragment.body,
-              target: target,
+          if (_hasCopyableBody(body))
+            TextButton(
+              onPressed: () => showHttpFragmentCopyDialog(
+                context,
+                diagnostics: diagnostics,
+                recordId: recordId,
+                fragment: HttpFragment.body,
+                target: target,
+              ),
+              child: const Text('Copy body'),
             ),
-            child: const Text('Copy body'),
-          ),
         ],
       ),
       BodyInspector(body: body),
+      if (recordContext != null) ...[
+        const Divider(),
+        Text('Context', style: Theme.of(context).textTheme.titleMedium),
+        SelectableText(
+          const JsonEncoder.withIndent('  ').convert(recordContext),
+        ),
+      ],
     ],
   );
+}
+
+bool _hasCopyableBody(BodySnapshot? body) {
+  if (body == null || body.state != BodyCaptureState.captured) return false;
+  final data = body.data;
+  if (data == null) return false;
+  if (data is String) return data.isNotEmpty;
+  if (data is Iterable) return data.isNotEmpty;
+  if (data is Map) return data.isNotEmpty;
+  return true;
 }
 
 /// Inspects captured text, JSON and media metadata without reading file bytes.

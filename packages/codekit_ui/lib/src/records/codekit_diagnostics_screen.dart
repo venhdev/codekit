@@ -31,6 +31,8 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
   final TextEditingController _search = TextEditingController();
   bool _regex = false;
   bool _busy = false;
+  bool _selectionMode = false;
+  TraceSession? _traceSession;
 
   @override
   void initState() {
@@ -70,6 +72,23 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
     setState(() => _regex = selected.isRegex);
     await _submit();
   }
+
+  Future<void> _traceSessions() async {
+    final session = await showTraceSessionsSheet(context, widget.diagnostics);
+    if (session == null || !mounted) return;
+    setState(() => _traceSession = session);
+    await _controller.setTraceScope(session.recordIds);
+  }
+
+  Future<void> _clearTraceScope() async {
+    setState(() => _traceSession = null);
+    await _controller.clearTraceScope();
+  }
+
+  void _toggleSelectionMode() => setState(() {
+    _selectionMode = !_selectionMode;
+    if (!_selectionMode) _controller.clearSelection();
+  });
 
   Future<void> _export({required bool allMatching}) async {
     if (_busy) return;
@@ -140,7 +159,7 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
         IconButton(
           tooltip: 'Trace sessions',
           icon: const Icon(Icons.timeline),
-          onPressed: () => showTraceSessionsSheet(context, widget.diagnostics),
+          onPressed: _traceSessions,
         ),
         IconButton(
           tooltip: 'Filters',
@@ -148,6 +167,8 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
           onPressed: () => showModalBottomSheet<void>(
             context: context,
             isScrollControlled: true,
+            enableDrag: true,
+            showDragHandle: true,
             builder: (_) => FiltersSheet(controller: _controller),
           ),
         ),
@@ -156,6 +177,14 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
           icon: const Icon(Icons.refresh),
           onPressed: _controller.reload,
         ),
+        if (_selectionMode)
+          TextButton(onPressed: _toggleSelectionMode, child: const Text('Done'))
+        else
+          IconButton(
+            tooltip: 'Select records',
+            icon: const Icon(Icons.checklist),
+            onPressed: _toggleSelectionMode,
+          ),
       ],
     ),
     body: Column(
@@ -194,8 +223,23 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: Text(
-              '${_controller.matchingLabel} · ${_controller.selectedIds.length} selected',
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              children: [
+                Text(
+                  _selectionMode
+                      ? '${_controller.matchingLabel} · ${_controller.selectedIds.length} selected'
+                      : _controller.matchingLabel,
+                ),
+                if (_traceSession != null)
+                  InputChip(
+                    label: Text(
+                      'Trace: ${_traceSession!.name ?? _traceSession!.id}',
+                    ),
+                    onDeleted: _clearTraceScope,
+                  ),
+              ],
             ),
           ),
         ),
@@ -228,6 +272,7 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
                       final record = _controller.records[index];
                       return DiagnosticRecordTile(
                         record: record,
+                        selectionMode: _selectionMode,
                         selected: _controller.selectedIds.contains(record.id),
                         onSelect: () => _controller.toggleSelected(record.id),
                         onOpen: () => Navigator.push<void>(
@@ -246,32 +291,34 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
         ),
       ],
     ),
-    bottomNavigationBar: SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Wrap(
-          alignment: WrapAlignment.end,
-          spacing: 8,
-          children: [
-            OutlinedButton(
-              onPressed: _controller.selectedIds.isEmpty || _busy
-                  ? null
-                  : () => _export(allMatching: false),
-              child: const Text('Export selected'),
+    bottomNavigationBar: !_selectionMode
+        ? null
+        : SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                children: [
+                  OutlinedButton(
+                    onPressed: _controller.selectedIds.isEmpty || _busy
+                        ? null
+                        : () => _export(allMatching: false),
+                    child: const Text('Export selected'),
+                  ),
+                  OutlinedButton(
+                    onPressed: _busy ? null : () => _export(allMatching: true),
+                    child: const Text('All matching'),
+                  ),
+                  TextButton(
+                    onPressed: _controller.selectedIds.isEmpty || _busy
+                        ? null
+                        : _delete,
+                    child: const Text('Delete'),
+                  ),
+                ],
+              ),
             ),
-            OutlinedButton(
-              onPressed: _busy ? null : () => _export(allMatching: true),
-              child: const Text('All matching'),
-            ),
-            TextButton(
-              onPressed: _controller.selectedIds.isEmpty || _busy
-                  ? null
-                  : _delete,
-              child: const Text('Delete'),
-            ),
-          ],
-        ),
-      ),
-    ),
+          ),
   );
 }
