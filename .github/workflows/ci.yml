@@ -1,0 +1,200 @@
+name: Verify packages
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changed packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      all: ${{ steps.filter.outputs.all }}
+      codekit_core: ${{ steps.filter.outputs.codekit_core }}
+      codekit_dio: ${{ steps.filter.outputs.codekit_dio }}
+      codekit_http: ${{ steps.filter.outputs.codekit_http }}
+      codekit_drift_diagnostic_store: ${{ steps.filter.outputs.codekit_drift_diagnostic_store }}
+      codekit_webhook: ${{ steps.filter.outputs.codekit_webhook }}
+      codekit_ui: ${{ steps.filter.outputs.codekit_ui }}
+      codekit_flutter: ${{ steps.filter.outputs.codekit_flutter }}
+      colored_logger: ${{ steps.filter.outputs.colored_logger }}
+      codekit_console: ${{ steps.filter.outputs.codekit_console }}
+      codekit: ${{ steps.filter.outputs.codekit }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            all:
+              - 'pubspec.yaml'
+              - 'pubspec.lock'
+              - '.fvmrc'
+              - 'analysis_options.yaml'
+              - '.github/workflows/**'
+            codekit_core:
+              - 'packages/codekit_core/**'
+              - 'pubspec.yaml'
+              - 'pubspec.lock'
+              - '.fvmrc'
+              - 'analysis_options.yaml'
+              - '.github/workflows/**'
+            codekit_dio:
+              - 'packages/codekit_dio/**'
+              - 'pubspec.yaml'
+              - 'pubspec.lock'
+              - '.fvmrc'
+              - 'analysis_options.yaml'
+              - '.github/workflows/**'
+            codekit_http:
+              - 'packages/codekit_http/**'
+              - 'pubspec.yaml'
+              - 'pubspec.lock'
+              - '.fvmrc'
+              - 'analysis_options.yaml'
+              - '.github/workflows/**'
+            codekit_drift_diagnostic_store:
+              - 'packages/codekit_drift_diagnostic_store/**'
+              - 'pubspec.yaml'
+              - 'pubspec.lock'
+              - '.fvmrc'
+              - 'analysis_options.yaml'
+              - '.github/workflows/**'
+            codekit_webhook:
+              - 'packages/codekit_webhook/**'
+              - 'pubspec.yaml'
+              - 'pubspec.lock'
+              - '.fvmrc'
+              - 'analysis_options.yaml'
+              - '.github/workflows/**'
+            codekit_ui:
+              - 'packages/codekit_ui/**'
+              - 'pubspec.yaml'
+              - 'pubspec.lock'
+              - '.fvmrc'
+              - 'analysis_options.yaml'
+              - '.github/workflows/**'
+            codekit_flutter:
+              - 'packages/codekit_flutter/**'
+              - 'pubspec.yaml'
+              - 'pubspec.lock'
+              - '.fvmrc'
+              - 'analysis_options.yaml'
+              - '.github/workflows/**'
+            colored_logger:
+              - 'packages/colored_logger/**'
+              - 'pubspec.yaml'
+              - 'pubspec.lock'
+              - '.fvmrc'
+              - 'analysis_options.yaml'
+              - '.github/workflows/**'
+            codekit_console:
+              - 'packages/codekit_console/**'
+              - 'pubspec.yaml'
+              - 'pubspec.lock'
+              - '.fvmrc'
+              - 'analysis_options.yaml'
+              - '.github/workflows/**'
+            codekit:
+              - 'packages/codekit/**'
+              - 'pubspec.yaml'
+              - 'pubspec.lock'
+              - '.fvmrc'
+              - 'analysis_options.yaml'
+              - '.github/workflows/**'
+
+  verify:
+    name: Verify ${{ matrix.package }}
+    needs: changes
+    if: >-
+      needs.changes.outputs.all == 'true' ||
+      needs.changes.outputs[matrix.package] == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - codekit_core
+          - codekit_dio
+          - codekit_http
+          - codekit_drift_diagnostic_store
+          - codekit_webhook
+          - codekit_ui
+          - codekit_flutter
+          - colored_logger
+          - codekit_console
+          - codekit
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.0
+          cache: true
+
+      - name: Resolve workspace dependencies
+        run: flutter pub get
+
+      - name: Check formatting
+        working-directory: packages/${{ matrix.package }}
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze Dart package
+        if: matrix.package != 'codekit_ui' && matrix.package != 'codekit_flutter'
+        working-directory: packages/${{ matrix.package }}
+        run: dart analyze --fatal-infos
+
+      - name: Test Dart package
+        if: matrix.package != 'codekit_ui' && matrix.package != 'codekit_flutter' && hashFiles(format('packages/{0}/test/**', matrix.package)) != ''
+        working-directory: packages/${{ matrix.package }}
+        run: dart test
+
+      - name: Analyze Flutter package
+        if: matrix.package == 'codekit_ui' || matrix.package == 'codekit_flutter'
+        working-directory: packages/${{ matrix.package }}
+        run: flutter analyze --fatal-infos
+
+      - name: Test Flutter package
+        if: matrix.package == 'codekit_ui' || matrix.package == 'codekit_flutter'
+        working-directory: packages/${{ matrix.package }}
+        run: flutter test
+
+      - name: Test native UI package suite
+        if: matrix.package == 'codekit_ui'
+        working-directory: packages/${{ matrix.package }}
+        run: flutter test test_native
+
+  required-check:
+    name: Package CI result
+    if: always()
+    needs:
+      - changes
+      - verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check package jobs
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
+        run: |
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Package change detection failed."
+            exit 1
+          fi
+          if [[ "$VERIFY_RESULT" == "failure" || "$VERIFY_RESULT" == "cancelled" ]]; then
+            echo "At least one package verification failed."
+            exit 1
+          fi

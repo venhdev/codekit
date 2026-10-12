@@ -12,6 +12,23 @@ This runbook is the operational source of truth for publishing CodeKit packages 
 
 The [CodeKit roadmap](../roadmap.md) owns product milestones. The `/ci-pub` workflow owns release quality checks and version approval. This runbook owns Pub workspace validation, package ordering, and the publish commands.
 
+## Package CI and release tags
+
+GitHub Actions verifies only workspace packages with changed files. Changes to
+the root workspace manifest or lockfile, SDK pin, shared analysis options, or
+CI workflows trigger verification for all packages. Verification runs format,
+analysis, and tests from each selected package directory after resolving the
+shared workspace from the root. `example` remains a workspace member but is not
+a CI target: its source is not built, analyzed, tested, or published.
+Flutter package verification also runs its native-specific test suite when
+present.
+
+Release tags identify one package and its manifest version using
+`<package-name>-v<version>`, for example `codekit_core-v0.1.1`. The publish
+workflow rejects a tag unless its package name and version match that package's
+`pubspec.yaml`. Each tag publishes one package; when releasing dependent
+packages together, create tags and publish in dependency order.
+
 ## Preconditions
 
 - All packages in the release scope are complete, and their tests, formatting, and changelogs are ready for the `/ci-pub` preflight.
@@ -43,7 +60,7 @@ any order once their dependencies are available.
 2. **Confirm workspace membership.** Run `fvm dart pub workspace list` from the repository and check that every package intended for release appears in the list.
 3. **Dry-run every package.** For each package in the release scope, run `fvm dart pub -C packages/<package> publish --dry-run`. Review the included file list and resolve every warning or error before continuing.
 4. **Order packages by dependency.** Publish depended-on packages before packages that depend on them. Confirm that each internal version constraint accepts the dependency's release version.
-5. **Publish each package individually.** Run `fvm dart pub -C packages/<package> publish` for each package, following the dependency order. Pub publishes the package in the selected directory; the workspace is not one atomic release.
+5. **Publish each package individually.** Create and push `<package>-v<version>` for each approved package, following the dependency order. The GitHub Actions publish workflow validates the tagged package, runs `publish --dry-run`, then publishes from `packages/<package>` through pub.dev OIDC. Pub publishes the package in the selected directory; the workspace is not one atomic release.
 6. **Handle propagation delays safely.** If a newly published dependency is not yet available during validation of a dependent package, wait and retry. Do not use `--skip-validation` in the normal release path because it bypasses client-side checks and dependency resolution.
 7. **Record completion.** Confirm the released versions on pub.dev and update the relevant task/release records.
 

@@ -1,0 +1,106 @@
+name: Publish package to pub.dev
+
+on:
+  push:
+    tags:
+      - 'codekit_core-v*'
+      - 'codekit_dio-v*'
+      - 'codekit_http-v*'
+      - 'codekit_drift_diagnostic_store-v*'
+      - 'codekit_webhook-v*'
+      - 'codekit_ui-v*'
+      - 'codekit_flutter-v*'
+      - 'colored_logger-v*'
+      - 'codekit_console-v*'
+      - 'codekit-v*'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate tagged package
+    runs-on: ubuntu-latest
+    outputs:
+      package: ${{ steps.target.outputs.package }}
+      working_directory: ${{ steps.target.outputs.working_directory }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.0
+          cache: true
+
+      - name: Resolve workspace dependencies
+        run: flutter pub get
+
+      - name: Resolve and validate tag target
+        id: target
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          package="${RELEASE_TAG%-v*}"
+          version="${RELEASE_TAG#"$package-v"}"
+
+          case "$package" in
+            codekit_core|codekit_dio|codekit_http|codekit_drift_diagnostic_store|codekit_webhook|codekit_ui|codekit_flutter|colored_logger|codekit_console|codekit)
+              ;;
+            *)
+              echo "Unsupported package tag: $RELEASE_TAG"
+              exit 1
+              ;;
+          esac
+
+          manifest="packages/$package/pubspec.yaml"
+          manifest_name="$(sed -n 's/^name:[[:space:]]*//p' "$manifest" | head -n 1)"
+          manifest_version="$(sed -n 's/^version:[[:space:]]*//p' "$manifest" | head -n 1)"
+
+          if [[ "$manifest_name" != "$package" || "$manifest_version" != "$version" ]]; then
+            echo "Tag $RELEASE_TAG does not match $manifest_name $manifest_version in $manifest"
+            exit 1
+          fi
+
+          echo "package=$package" >> "$GITHUB_OUTPUT"
+          echo "working_directory=packages/$package" >> "$GITHUB_OUTPUT"
+
+      - name: Check package formatting
+        working-directory: ${{ steps.target.outputs.working_directory }}
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze Dart package
+        if: steps.target.outputs.package != 'codekit_ui' && steps.target.outputs.package != 'codekit_flutter'
+        working-directory: ${{ steps.target.outputs.working_directory }}
+        run: dart analyze --fatal-infos
+
+      - name: Test Dart package
+        if: steps.target.outputs.package != 'codekit_ui' && steps.target.outputs.package != 'codekit_flutter' && hashFiles(format('{0}/test/**', steps.target.outputs.working_directory)) != ''
+        working-directory: ${{ steps.target.outputs.working_directory }}
+        run: dart test
+
+      - name: Analyze Flutter package
+        if: steps.target.outputs.package == 'codekit_ui' || steps.target.outputs.package == 'codekit_flutter'
+        working-directory: ${{ steps.target.outputs.working_directory }}
+        run: flutter analyze --fatal-infos
+
+      - name: Test Flutter package
+        if: steps.target.outputs.package == 'codekit_ui' || steps.target.outputs.package == 'codekit_flutter'
+        working-directory: ${{ steps.target.outputs.working_directory }}
+        run: flutter test
+
+      - name: Test native UI package suite
+        if: steps.target.outputs.package == 'codekit_ui'
+        working-directory: ${{ steps.target.outputs.working_directory }}
+        run: flutter test test_native
+
+  publish:
+    name: Publish to pub.dev
+    needs: validate
+    permissions:
+      contents: read
+      id-token: write
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      working-directory: ${{ needs.validate.outputs.working_directory }}
