@@ -1,4 +1,4 @@
-## 0.1.0
+## Unreleased
 
-- Rebuild the previously published CodeKit package as a Dart-first diagnostics umbrella, exporting `codekit_core` and `codekit_console`.
-- The legacy utility API from 0.0.x is not carried forward; projects using it must migrate explicitly.
+- Workspace package version 0.1.0 is a Dart-first diagnostics umbrella that exports `codekit_core` and `codekit_console`.
+- The previously published 0.0.x utility API is not carried forward; existing callers must migrate explicitly.

@@ -1,6 +1,7 @@
 # codekit_drift_diagnostic_store
 
-Native SQLite persistence for CodeKit diagnostics, implemented with Drift.
+Native SQLite persistence for CodeKit diagnostics, implemented with Drift. This
+optional adapter does not make the core recorder depend on a database.
 
 ```dart
 import 'package:codekit_core/codekit_core.dart';
@@ -28,9 +29,17 @@ fail without deleting the existing database.
 manually. In that case, the diagnostics instance owns and closes the injected
 store on disposal. Malformed persisted records and Trace sessions are skipped
 with a warning; provide `onStoreWarning` to customize that reporting path.
+Diagnostics owns the store and closes it on disposal; do not separately close
+the same store or expect disposal to flush queued core writes.
+
+Store raw is the default record mode and may persist sensitive values. Configure
+redaction before recording if that is not acceptable. This adapter does not
+provide database encryption or key management.
 
 ## Development
 
 Run `dart run build_runner build` after changing the Drift schema. The generated
 database file is checked in with the package. Run `dart test` to verify actual
 SQLite persistence, reopen behavior, retention, queries and Trace sessions.
+This workspace package is not currently published; see the
+[implementation guide](../../doc/guides/codekit-implementation-guide.md).

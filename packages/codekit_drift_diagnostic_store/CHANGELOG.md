@@ -1,3 +1,3 @@
-## 0.1.0
+## Unreleased
 
-- Initial native Drift diagnostic store and diagnostics factory.
+- Workspace package version 0.1.0 provides the native Drift diagnostic store and diagnostics factory.

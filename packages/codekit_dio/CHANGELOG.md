@@ -1,3 +1,3 @@
-## 0.1.0
+## Unreleased
 
-- Initial Dio interceptor and `withDiagnostics()` integration.
+- Workspace package version 0.1.0 provides the Dio interceptor and `withDiagnostics()` integration.

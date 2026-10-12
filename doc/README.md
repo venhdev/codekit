@@ -15,6 +15,7 @@
 | **HTTP Client Adapters** | [`specs/http-client-adapters.md`](specs/http-client-adapters.md) | Independently installable Dio/http capture and extension behavior |
 | **Diagnostic Sinks** | [`specs/diagnostic-sinks.md`](specs/diagnostic-sinks.md) | HTTP/LOG dispatch policy, transport, delivery guarantees, content selection, and service options |
 | **Diagnostics UI** | [`specs/diagnostics-ui.md`](specs/diagnostics-ui.md) | Records inspection, Trace session management, export actions, and search history |
+| **Application Integration Guide** | [`guides/codekit-implementation-guide.md`](guides/codekit-implementation-guide.md) | Practical package selection, setup order, safety notes, and a copyable coding-agent prompt; the specifications above remain authoritative |
 | **Package Publishing** | [`runbooks/pub-workspace-publishing.md`](runbooks/pub-workspace-publishing.md) | Release preflight and per-package publishing from a Pub workspace |
 | **Documentation Governance** | `doc/` | Governed via `/ssot` |
 

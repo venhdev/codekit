@@ -1,3 +1,3 @@
-## 0.1.0
+## Unreleased
 
-- Initial colored console sink for CodeKit diagnostics.
+- Workspace package version 0.1.0 provides the colored console sink for CodeKit diagnostics.
