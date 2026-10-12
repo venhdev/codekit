@@ -72,7 +72,7 @@ class _LogDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.all(12),
     children: [
       if (record.source != null) Text('Source: ${record.source}'),
       Text(
@@ -109,38 +109,13 @@ class _HttpDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DefaultTabController(
-    length: 2,
+    length: 3,
     child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SelectableText('${payload.method} ${payload.uri}'),
-              Text('Status: ${payload.response?.statusCode ?? 'Unknown'}'),
-              Text(
-                'Duration: ${payload.duration?.inMilliseconds ?? 'Unknown'} ms',
-              ),
-              Text('Started: ${payload.requestStartedAt.toLocal()}'),
-              if (record.source != null) Text('Source: ${record.source}'),
-              if (payload.error != null)
-                SelectableText('Error: ${payload.error!.message}'),
-              TextButton.icon(
-                onPressed: () => showHttpFragmentCopyDialog(
-                  context,
-                  diagnostics: diagnostics,
-                  recordId: record.id,
-                  fragment: HttpFragment.curl,
-                ),
-                icon: const Icon(Icons.copy),
-                label: const Text('Copy cURL'),
-              ),
-            ],
-          ),
-        ),
         const TabBar(
           tabs: [
+            Tab(text: 'Summary'),
             Tab(text: 'Request'),
             Tab(text: 'Response'),
           ],
@@ -148,6 +123,30 @@ class _HttpDetails extends StatelessWidget {
         Expanded(
           child: TabBarView(
             children: [
+              ListView(
+                padding: const EdgeInsets.all(12),
+                children: [
+                  SelectableText('${payload.method} ${payload.uri}'),
+                  Text('Status: ${payload.response?.statusCode ?? 'Unknown'}'),
+                  Text(
+                    'Duration: ${payload.duration?.inMilliseconds ?? 'Unknown'} ms',
+                  ),
+                  Text('Started: ${payload.requestStartedAt.toLocal()}'),
+                  if (record.source != null) Text('Source: ${record.source}'),
+                  if (payload.error != null)
+                    SelectableText('Error: ${payload.error!.message}'),
+                  TextButton.icon(
+                    onPressed: () => showHttpFragmentCopyDialog(
+                      context,
+                      diagnostics: diagnostics,
+                      recordId: record.id,
+                      fragment: HttpFragment.curl,
+                    ),
+                    icon: const Icon(Icons.copy),
+                    label: const Text('Copy cURL'),
+                  ),
+                ],
+              ),
               _HttpTab(
                 recordId: record.id,
                 diagnostics: diagnostics,
@@ -191,7 +190,7 @@ class _HttpTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.all(12),
     children: [
       ExpansionTile(
         title: const Text('Headers'),

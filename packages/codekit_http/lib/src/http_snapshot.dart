@@ -3,6 +3,37 @@ import 'dart:convert';
 import 'package:codekit_core/codekit_core.dart';
 import 'package:http/http.dart' as http;
 
+/// Snapshots only an already buffered response, with no size limit.
+BodySnapshot snapshotResponseBody(http.Response response) {
+  final bytes = response.bodyBytes;
+  if (bytes.isEmpty) return const BodySnapshot.absent();
+  final type =
+      response.headers['content-type']?.split(';').first.trim().toLowerCase() ??
+      '';
+  final isJson =
+      type == 'application/json' ||
+      (type.startsWith('application/') && type.endsWith('+json'));
+  if (!isJson &&
+      !type.startsWith('text/') &&
+      type != 'application/xml' &&
+      !type.endsWith('+xml')) {
+    return const BodySnapshot.unsupported();
+  }
+  try {
+    final text = isJson ? utf8.decode(bytes) : response.body;
+    if (isJson) {
+      try {
+        return BodySnapshot.json(jsonDecode(text)).detached();
+      } on FormatException {
+        return BodySnapshot.text(text);
+      }
+    }
+    return BodySnapshot.text(text);
+  } catch (_) {
+    return const BodySnapshot.unsupported();
+  }
+}
+
 Map<String, List<String>> snapshotRequestHeaders(http.BaseRequest request) {
   final headers = request.headers.map((key, value) => MapEntry(key, [value]));
   if (request is http.MultipartRequest &&

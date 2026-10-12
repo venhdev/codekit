@@ -21,11 +21,26 @@ The app chooses the client implementation and owns its lifecycle. Reapplying the
 same diagnostics instance anywhere in the wrapper chain does not add another
 capture layer; a different diagnostics instance adds a layer.
 
-The wrapper captures at `send()`, which covers `Client` convenience methods. It
-does not consume request or response streams. Available text/JSON request bodies
-and multipart fields/file metadata can be recorded; multipart file bytes,
-streamed bodies and response bodies are not captured. HTTP response records are
-completed when response headers arrive. Multipart content type is recorded
+Each `head/get/post/put/patch/delete` call forwards to the same method on the
+inner client with the original parameters. The wrapper snapshots the completed
+`Response` and returns that exact instance, including custom subclasses.
+Supported JSON/text bodies are captured completely, without a size limit.
+Empty buffered bodies are absent; binary/unknown types and decode failures
+are unsupported. `read/readBytes` also preserve custom inner overrides: read
+captures the returned text; readBytes has no media type and remains unsupported.
+Neither method exposes response status/headers, so diagnostics leave those
+fields unknown.
+
+`send()` returns the original `StreamedResponse` without subscribing to,
+wrapping or consuming its stream. It records metadata at headers, with body
+unsupported, even when the app never reads the stream. Later stream errors and
+cancellation stay on the application stream and do not update that record.
+Duration ends when the inner method completes, before snapshot processing;
+record/Trace acceptance follows that boundary. Capture has CPU/memory overhead,
+but does not await persistence or sink delivery.
+
+Available request data may be snapshotted; streamed request bodies and multipart
+file bytes are not read. Multipart content type is recorded
 without the boundary that the inner client adds during request finalization.
 Requests made through the original inner client or top-level `http` helpers
 bypass this wrapper. Wrapper order determines whether retries appear as

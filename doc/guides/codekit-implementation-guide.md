@@ -484,9 +484,11 @@ for redacting data before persistence.
 ## 8. Capture HTTP clients
 
 Attach capture to the client's actual configured instance. CodeKit must not
-create a parallel client, buffer a stream, consume a response, add a request
-header, or change retry/error behavior to improve diagnostics. Capture failure
-must not replace the app's response or original network error.
+create a parallel client, read ahead or drain a response, add a request header,
+or change retry/error behavior to improve diagnostics. The package:http wrapper
+snapshots completed buffered responses; streamed bodies remain unsupported.
+Capture failure must not replace the app's response or original
+network error.
 
 ### Dio
 
@@ -556,14 +558,34 @@ top-level `http` functions bypasses capture. Wrapping the same diagnostics
 instance again in a wrapper chain does not add another layer. A different
 diagnostics instance adds one.
 
-The wrapper captures at `send()` and records at response headers. It returns the
-original response stream and does not consume it. Text/JSON request snapshots
-and multipart fields/file metadata may be captured; multipart file bytes,
-streamed request bodies, and response bodies are not captured. The multipart
-content type is recorded without a boundary added later by request
-finalization. Wrapper order determines whether a retry wrapper exposes each
-attempt or only its final response. Redirects handled inside the underlying
-client are not separate records.
+The wrapper forwards each head/get/post/put/patch/delete call to that exact
+method on the inner client with the original parameters. It snapshots the
+already-buffered Response and returns the same instance, including custom
+subclasses. JSON/text capture has no size limit or truncation. Empty buffered
+bodies are absent; binary/unknown types and decode failures are unsupported.
+Malformed JSON with valid UTF-8 is captured as text. Recorder/export redaction
+applies only to the diagnostic snapshot, not the response returned to the app.
+
+send() returns the original StreamedResponse without subscribing to, wrapping
+or consuming its stream. Its one record completes at headers, with body
+unsupported, even if the application never reads the body. Later stream
+errors/cancellation remain on the application stream and do not update the
+record. read()/readBytes() also preserve custom inner overrides: read captures
+returned text; readBytes has no content type and is unsupported. These APIs
+expose no status/headers; diagnostics leave those fields unknown.
+
+Duration stops when the inner method completes, before response snapshot
+processing. Trace membership follows recorder acceptance. Diagnostics have
+snapshot CPU/memory overhead but do not await persistence or sink delivery.
+See the [adapter contract](../specs/http-client-adapters.md#packagehttp)
+for capture boundaries, content types and decoding behavior.
+
+Text/JSON request snapshots and multipart fields/file metadata may be captured;
+multipart file bytes and streamed request bodies are not read. The multipart
+content type is recorded without a boundary added later by request finalization.
+Wrapper order determines whether a retry wrapper exposes each attempt or only
+its final response. Redirects handled inside the underlying client are not
+separate records.
 
 ### HTTP capture common behavior
 
@@ -571,8 +593,9 @@ client are not separate records.
 - Request IDs are generated before dispatch and remain internal metadata.
 - The stored record is completed once the adapter reaches its completion
   boundary; `recordedAt` is the recorder acceptance time, not request start.
-- Duration is measured by the adapter. For streamed responses it ends at
-  headers, not when the app later finishes reading the stream.
+- Duration is measured by the adapter: Dio streams and package:http send()
+  end at headers; buffered package:http calls end when the inner method
+  completes. Trace membership follows acceptance after snapshot preparation.
 - Body states distinguish `absent`, `captured`, `disabled`, and `unsupported`.
   Unsupported means the client could not make a supported non-invasive
   snapshot; it is not an empty body.
@@ -678,9 +701,15 @@ working and not an access-control mechanism.
   does not search headers, bodies, or context.
 - Long-pressing a record enters selection mode. Search and filters remain
   available; selected rows are outlined rather than shown with checkboxes.
-  Select all applies to the current filtered result set. Export and deletion
-  operate on selected IDs.
-- HTTP detail has separate Request and Response tabs, a summary, collapsible
+  Search/filter/reload/Trace scope changes preserve selected IDs. One bottom row
+  offers a tri-state checkbox for the loaded list, an expanding Share action
+  opening Confirm Export, and a delete icon confirming the selected count.
+  Selection outside the current list remains selected and is included in
+  export/deletion. Leaving selection clears it. Counts use `x results`, with
+  `+` while more pages remain.
+- HTTP detail has Summary, Request and Response tabs, each independently
+  scrollable. Summary includes the complete URI/query and error. Tabs stay
+  visible with long summaries. Request/Response have collapsible
   request/response headers (collapsed by default), and body inspection
   (expanded by default). Copy controls appear only when the corresponding data
   is available. Record ID, recorded time, and record mode are shown in an
@@ -689,6 +718,10 @@ working and not an access-control mechanism.
   Saved sessions can scope the list, be exported, or be explicitly deleted.
 - Filters, Settings, Trace sessions, and Search history use the same 55%-height
   draggable, scrollable sheet. Drag down or tap outside to close.
+- Settings offers System (default), Light and Dark viewer themes, independently
+  of the host app theme. `CodeKitViewerSettings.initialThemeMode` selects the
+  initial mode. A bubble retains the runtime choice while it exists; choices
+  are not persisted across restart. Details and modal surfaces share the theme.
 - Export asks the user to choose Redacted or As stored. Copy and Share are
   separate full-width actions; Share can optionally share a temporary `.txt`
   file on native platforms or download it on Web. The sheets close by drag or
@@ -975,9 +1008,11 @@ An agent implementing the checked features should follow this sequence:
   original inner client bypass capture.
 - Success, HTTP error response, network exception, retries, and URI exclusions
   produce the expected record count and local timing/ID metadata.
-- Supported text/JSON/multipart metadata is represented correctly; stream and
-  byte bodies are not consumed and are marked with the appropriate capture
-  state.
+- Supported text/JSON/multipart metadata is represented correctly. Request
+  streams and binary payloads are not read for capture. package:http response
+  body capture occurs only after a buffered inner method completes, without
+  a size limit. send() preserves the original response/stream and records once
+  at headers; streamed response bodies remain unsupported.
 - Tests verify the response stream remains readable by the application.
 
 ### Storage and lifecycle
@@ -1060,7 +1095,7 @@ never real service credentials.
 | No HTTP records | The request used a different client, code still uses the original `package:http` client instead of the wrapper, or the URI matches an exclusion. |
 | No webhook delivery | The sink's relevant `httpDispatchPolicy` or `logDispatchPolicy` is null, its policy excludes the record, or it is busy/cooling down. Configure explicit policies and inspect safe warnings. |
 | Record is accepted but not in a persistent query yet | The write is still pending. Await that receipt's `persistedOrNull()` if the flow needs confirmation; do not assume pending records are queryable. |
-| Body says unsupported | The adapter intentionally avoids consuming a stream or reading bytes. This is different from an empty body and must not be "fixed" by buffering the host response. |
+| Body says unsupported | Streamed responses from Dio or package:http send(), binary/unknown content types, decode failures, and readBytes() without a media type remain unsupported. Supported buffered JSON/text has no size limit. Never read ahead or drain a response to improve diagnostics. |
 | As-stored export still shows `[REDACTED]` | The record was redacted before it was stored. Removed values cannot be restored. |
 | Bubble is absent in release | `debugOnly: true` hides it outside debug mode. Set the intended visibility explicitly. |
 | Records disappear after restart | Memory storage is process-local. Select Drift on a supported native platform and provide a stable application-owned path. |
@@ -1125,8 +1160,9 @@ Implementation rules:
   global singleton or a second recorder for one app.
 - Add only the selected packages. `codekit_core` is the shared foundation;
   optional adapters, storage, sinks, hooks, and UI stay optional.
-- Preserve configured client instances and host behavior. Do not consume,
-  buffer, or wrap response streams to improve capture. Keep request IDs local.
+- Preserve configured client instances and host behavior. Use the existing
+  package:http wrapper's snapshots of completed buffered responses;
+  do not subscribe to, wrap or drain response streams. Keep request IDs local.
 - Deliberately choose storage, count retention, redaction policy, URI exclusion,
   and record mode. Remember: Store raw is the default; exports default to
   Redacted; redaction cannot guarantee discovery of every secret.

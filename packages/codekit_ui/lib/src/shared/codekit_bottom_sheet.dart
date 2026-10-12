@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../settings/codekit_viewer_theme.dart';
+
 /// Standard container for CodeKit modal sheets.
 ///
 /// Callers supply the scrollable content and any persistent actions. The
@@ -13,8 +15,12 @@ Future<T?> showCodeKitBottomSheet<T>(
   context: context,
   isScrollControlled: true,
   enableDrag: true,
-  showDragHandle: true,
-  builder: (context) => CodeKitBottomSheet(body: body, actions: actions),
+  showDragHandle: false,
+  backgroundColor: Colors.transparent,
+  builder: (_) => CodeKitViewerTheme.wrap(
+    context,
+    CodeKitBottomSheet(body: body, actions: actions),
+  ),
 );
 
 class CodeKitBottomSheet extends StatelessWidget {
@@ -30,33 +36,47 @@ class CodeKitBottomSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
     height: MediaQuery.sizeOf(context).height * .55,
-    child: SafeArea(
-      top: false,
-      child: Column(
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: IconButton(
-              tooltip: 'Close sheet',
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
+    child: Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      shape:
+          Theme.of(context).bottomSheetTheme.shape ??
+          const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: body,
-            ),
-          ),
-          if (actions.isNotEmpty)
+      clipBehavior: Clip.antiAlias,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
             Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: actions,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Center(
+                child: Container(
+                  width: 32,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
               ),
             ),
-        ],
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: body,
+              ),
+            ),
+            if (actions.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: actions,
+                ),
+              ),
+          ],
+        ),
       ),
     ),
   );

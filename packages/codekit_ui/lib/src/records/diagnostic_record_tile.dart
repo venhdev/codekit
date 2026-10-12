@@ -27,18 +27,20 @@ class DiagnosticRecordTile extends StatelessWidget {
     return InkWell(
       onTap: selectionMode ? onSelect : onOpen,
       onLongPress: selectionMode ? null : onLongPress,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+        decoration: selected
+            ? BoxDecoration(
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.primary,
+                  width: 1.5,
+                ),
+                borderRadius: BorderRadius.circular(8),
+              )
+            : null,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (selectionMode) ...[
-              Tooltip(
-                message: 'Select record ${record.id}',
-                child: Checkbox(value: selected, onChanged: (_) => onSelect()),
-              ),
-              const SizedBox(width: 4),
-            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,7 +122,16 @@ class DiagnosticRecordTile extends StatelessWidget {
       color: color ?? Theme.of(context).colorScheme.surfaceContainerHighest,
       borderRadius: BorderRadius.circular(6),
     ),
-    child: Text(text, style: Theme.of(context).textTheme.labelSmall),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color:
+            color == null ||
+                color == Theme.of(context).colorScheme.surfaceContainerHighest
+            ? Theme.of(context).colorScheme.onSurface
+            : Colors.black87,
+      ),
+    ),
   );
 
   Color _statusColor(BuildContext context, HttpStatusGroup group) =>

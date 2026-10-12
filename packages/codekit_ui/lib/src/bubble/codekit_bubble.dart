@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../records/codekit_diagnostics_screen.dart';
 import '../search_history/search_history_store.dart';
 import '../settings/codekit_viewer_settings.dart';
+import '../settings/codekit_viewer_theme.dart';
 
 /// Place in MaterialApp.builder with the same navigatorKey as MaterialApp.
 class CodeKitBubble extends StatefulWidget {
@@ -29,12 +30,16 @@ class CodeKitBubble extends StatefulWidget {
 
 class _CodeKitBubbleState extends State<CodeKitBubble> {
   final SearchHistoryStore _history = SearchHistoryStore();
+  late final ValueNotifier<ThemeMode> _theme = ValueNotifier(
+    widget.viewerSettings.initialThemeMode,
+  );
   Offset _inset = const Offset(16, 24);
   bool _open = false;
 
   @override
   void dispose() {
     _history.dispose();
+    _theme.dispose();
     super.dispose();
   }
 
@@ -45,10 +50,13 @@ class _CodeKitBubbleState extends State<CodeKitBubble> {
     try {
       await navigator.push<void>(
         MaterialPageRoute<void>(
-          builder: (_) => CodeKitDiagnosticsScreen(
-            diagnostics: widget.diagnostics,
-            searchHistory: _history,
-            viewerSettings: widget.viewerSettings,
+          builder: (_) => CodeKitViewerTheme(
+            controller: _theme,
+            child: CodeKitDiagnosticsScreen(
+              diagnostics: widget.diagnostics,
+              searchHistory: _history,
+              viewerSettings: widget.viewerSettings,
+            ),
           ),
         ),
       );

@@ -26,8 +26,24 @@ class RecordsController extends ChangeNotifier {
   List<String>? _traceRecordIds;
   int _generation = 0;
 
-  String get matchingLabel => '${records.length}${hasMore ? '+' : ''} matching';
+  String get resultsLabel => '${records.length}${hasMore ? '+' : ''} results';
+
+  /// Checkbox state reflects only IDs in the currently loaded list.
+  bool? get visibleSelection {
+    final count = records
+        .where((record) => selectedIds.contains(record.id))
+        .length;
+    if (count == 0) return false;
+    return count == records.length ? true : null;
+  }
+
   bool get hasTraceScope => _traceRecordIds != null;
+  bool get hasActiveFilters =>
+      statusGroups.isNotEmpty ||
+      durationLevels.isNotEmpty ||
+      types.isNotEmpty ||
+      from != null ||
+      to != null;
 
   RecordQuery _query({String? cursor}) => RecordQuery(
     cursor: cursor,
@@ -43,7 +59,6 @@ class RecordsController extends ChangeNotifier {
   Future<void> reload() async {
     _generation++;
     records = const [];
-    selectedIds.clear();
     _cursor = null;
     hasMore = true;
     loading = false;
@@ -153,18 +168,18 @@ class RecordsController extends ChangeNotifier {
     await reload();
   }
 
-  /// Resolves every match only for an explicit all-matching export.
-  Future<List<String>> allMatchingIds() async {
-    if (_traceRecordIds != null) {
-      return records.map((record) => record.id).toList();
+  void toggleVisibleSelection() {
+    final ids = records.map((record) => record.id);
+    if (visibleSelection == true) {
+      selectedIds.removeAll(ids);
+    } else {
+      selectedIds.addAll(ids);
     }
-    final ids = <String>[];
-    String? cursor;
-    do {
-      final page = await diagnostics.query(_query(cursor: cursor));
-      ids.addAll(page.records.map((record) => record.id));
-      cursor = page.nextCursor;
-    } while (cursor != null);
-    return ids;
+    notifyListeners();
+  }
+
+  void removeSelected(Iterable<String> ids) {
+    selectedIds.removeAll(ids);
+    notifyListeners();
   }
 }

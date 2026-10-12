@@ -9,6 +9,7 @@ import '../search_history/search_history_sheet.dart';
 import '../search_history/search_history_store.dart';
 import '../settings/codekit_viewer_settings.dart';
 import '../settings/diagnostics_settings_sheet.dart';
+import '../settings/codekit_viewer_theme.dart';
 import '../traces/trace_sessions_sheet.dart';
 import 'diagnostic_record_tile.dart';
 import 'filters_sheet.dart';
@@ -32,6 +33,39 @@ class CodeKitDiagnosticsScreen extends StatefulWidget {
 }
 
 class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
+  @override
+  Widget build(BuildContext context) {
+    final screen = _DiagnosticsRecordsScreen(
+      diagnostics: widget.diagnostics,
+      searchHistory: widget.searchHistory,
+      viewerSettings: widget.viewerSettings,
+    );
+    return CodeKitViewerTheme.controllerOf(context) == null
+        ? CodeKitViewerTheme(
+            initialMode: widget.viewerSettings.initialThemeMode,
+            child: screen,
+          )
+        : screen;
+  }
+}
+
+class _DiagnosticsRecordsScreen extends StatefulWidget {
+  const _DiagnosticsRecordsScreen({
+    required this.diagnostics,
+    required this.searchHistory,
+    required this.viewerSettings,
+  });
+
+  final CodeKitDiagnostics diagnostics;
+  final SearchHistoryStore? searchHistory;
+  final CodeKitViewerSettings viewerSettings;
+
+  @override
+  State<_DiagnosticsRecordsScreen> createState() =>
+      _DiagnosticsRecordsScreenState();
+}
+
+class _DiagnosticsRecordsScreenState extends State<_DiagnosticsRecordsScreen> {
   late final SearchHistoryStore _history;
   late final RecordsController _controller;
   final TextEditingController _search = TextEditingController();
@@ -148,13 +182,11 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
     }
   }
 
-  Future<void> _export({required bool allMatching}) async {
+  Future<void> _export() async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final ids = allMatching
-          ? await _controller.allMatchingIds()
-          : _controller.selectedIds.toList();
+      final ids = _controller.selectedIds.toList();
       if (!mounted) return;
       if (ids.isEmpty) {
         _message('No records selected');
@@ -169,38 +201,44 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
         ),
       );
     } catch (_) {
-      if (mounted) _message('Could not load matching records');
+      if (mounted) _message('Could not export selected records');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _delete() async {
+    if (_busy) return;
     final ids = _controller.selectedIds.toList();
     if (ids.isEmpty) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Delete ${ids.length} records?'),
-        content: const Text('Saved Trace sessions are kept.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
     try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Delete ${ids.length} records?'),
+          content: const Text('Saved Trace sessions are kept.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
       await widget.diagnostics.deleteByIds(ids);
+      if (!mounted) return;
+      _controller.removeSelected(ids);
       await _controller.reload();
     } catch (_) {
       if (mounted) _message('Delete failed');
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -220,101 +258,101 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
             : 'CodeKit',
       ),
       actions: [
-        if (!_selectionMode) ...[
-          IconButton(
-            tooltip: 'Filters',
-            icon: const Icon(Icons.tune),
-            onPressed: () => showModalBottomSheet<void>(
-              context: context,
-              isScrollControlled: true,
-              enableDrag: true,
-              showDragHandle: true,
-              builder: (_) => FiltersSheet(controller: _controller),
-            ),
+        IconButton(
+          tooltip: _controller.hasActiveFilters ? 'Filters active' : 'Filters',
+          icon: Badge(
+            isLabelVisible: _controller.hasActiveFilters,
+            smallSize: 8,
+            child: const Icon(Icons.tune),
           ),
-          IconButton(
-            tooltip: 'Settings',
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => showDiagnosticsSettingsSheet(
+          onPressed: () => showModalBottomSheet<void>(
+            context: context,
+            isScrollControlled: true,
+            enableDrag: true,
+            showDragHandle: false,
+            backgroundColor: Colors.transparent,
+            builder: (_) => CodeKitViewerTheme.wrap(
               context,
-              diagnostics: widget.diagnostics,
-              settings: widget.viewerSettings,
+              FiltersSheet(controller: _controller),
             ),
           ),
-        ],
+        ),
+        IconButton(
+          tooltip: 'Settings',
+          icon: const Icon(Icons.settings_outlined),
+          onPressed: () => showDiagnosticsSettingsSheet(
+            context,
+            diagnostics: widget.diagnostics,
+            settings: widget.viewerSettings,
+          ),
+        ),
       ],
     ),
     body: Column(
       children: [
-        if (!_selectionMode)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _search,
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => _submit(),
-                    decoration: InputDecoration(
-                      hintText: 'Search records',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: IconButton(
-                        tooltip: _regex
-                            ? 'Regex search enabled'
-                            : 'Text search enabled',
-                        icon: Text(_regex ? '.*' : 'abc'),
-                        onPressed: () => setState(() => _regex = !_regex),
-                      ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 2, 8, 2),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _search,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => _submit(),
+                  decoration: InputDecoration(
+                    hintText: 'Search records',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: IconButton(
+                      tooltip: _regex
+                          ? 'Regex search enabled'
+                          : 'Text search enabled',
+                      icon: Text(_regex ? '.*' : 'abc'),
+                      onPressed: () => setState(() => _regex = !_regex),
                     ),
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Search history',
-                  icon: const Icon(Icons.history),
-                  onPressed: _historySheet,
-                ),
-                IconButton(
-                  tooltip: 'Reload',
-                  icon: const Icon(Icons.refresh),
-                  onPressed: _controller.reload,
-                ),
-              ],
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            children: [
-              Text(
-                _selectionMode
-                    ? '${_controller.selectedIds.length} selected'
-                    : _controller.matchingLabel,
               ),
-              if (_traceSession != null && !_selectionMode)
-                InputChip(
-                  label: Text(
-                    'Trace: ${_traceSession!.name ?? _traceSession!.id}',
+              IconButton(
+                tooltip: 'Search history',
+                icon: const Icon(Icons.history),
+                onPressed: _historySheet,
+              ),
+              IconButton(
+                tooltip: 'Reload',
+                icon: const Icon(Icons.refresh),
+                onPressed: _controller.reload,
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 2, 8, 2),
+          child: Row(
+            children: [
+              Expanded(child: Text(_controller.resultsLabel)),
+              if (_traceSession != null)
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 128),
+                  child: InputChip(
+                    label: Text(
+                      'Trace: ${_traceSession!.name ?? _traceSession!.id}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onDeleted: _clearTraceScope,
+                    visualDensity: VisualDensity.compact,
                   ),
-                  onDeleted: _clearTraceScope,
                 ),
-              if (_selectionMode && widget.diagnostics.isTraceActive)
-                Chip(
-                  label: Text(
-                    'Trace · ${widget.diagnostics.activeTraceRecordCount} IDs',
-                  ),
-                )
-              else if (!_selectionMode)
-                _TraceControl(
-                  active: widget.diagnostics.isTraceActive,
-                  count: widget.diagnostics.activeTraceRecordCount,
-                  onOpenSessions: _traceSessions,
-                  onToggle: widget.diagnostics.isTraceActive
-                      ? _stopTrace
-                      : _startTrace,
-                ),
+              _TraceControl(
+                active: widget.diagnostics.isTraceActive,
+                count: widget.diagnostics.activeTraceRecordCount,
+                onOpenSessions: _selectionMode ? null : _traceSessions,
+                onToggle: _selectionMode
+                    ? null
+                    : widget.diagnostics.isTraceActive
+                    ? _stopTrace
+                    : _startTrace,
+              ),
             ],
           ),
         ),
@@ -326,25 +364,54 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
         : SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(8),
-              child: Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 8,
+              child: Row(
                 children: [
-                  OutlinedButton(
-                    onPressed: _controller.selectedIds.isEmpty || _busy
-                        ? null
-                        : () => _export(allMatching: false),
-                    child: const Text('Export selected'),
+                  Tooltip(
+                    message: _controller.visibleSelection == true
+                        ? 'Deselect listed records'
+                        : 'Select listed records',
+                    child: Checkbox(
+                      tristate: true,
+                      value: _controller.visibleSelection,
+                      semanticLabel: 'Select listed records',
+                      onChanged: _busy || _controller.records.isEmpty
+                          ? null
+                          : (_) => _controller.toggleVisibleSelection(),
+                    ),
                   ),
-                  OutlinedButton(
-                    onPressed: _busy ? null : () => _export(allMatching: true),
-                    child: const Text('All matching'),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _controller.selectedIds.isEmpty || _busy
+                          ? null
+                          : _export,
+                      style: FilledButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      icon: const Icon(Icons.share_outlined),
+                      label: const Text('Share'),
+                    ),
                   ),
-                  TextButton(
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    tooltip: 'Delete selected records',
+                    style: IconButton.styleFrom(
+                      backgroundColor: Theme.of(context)
+                          .colorScheme
+                          .errorContainer,
+                      foregroundColor: Theme.of(context)
+                          .colorScheme
+                          .onErrorContainer,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
                     onPressed: _controller.selectedIds.isEmpty || _busy
                         ? null
                         : _delete,
-                    child: const Text('Delete'),
+                    icon: const Icon(Icons.delete_outline),
                   ),
                 ],
               ),
@@ -388,9 +455,12 @@ class _CodeKitDiagnosticsScreenState extends State<CodeKitDiagnosticsScreen> {
                   onOpen: () => Navigator.push<void>(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => RecordDetailsScreen(
-                        diagnostics: widget.diagnostics,
-                        record: record,
+                      builder: (_) => CodeKitViewerTheme.wrap(
+                        context,
+                        RecordDetailsScreen(
+                          diagnostics: widget.diagnostics,
+                          record: record,
+                        ),
                       ),
                     ),
                   ),
@@ -414,8 +484,8 @@ class _TraceControl extends StatelessWidget {
 
   final bool active;
   final int count;
-  final VoidCallback onOpenSessions;
-  final VoidCallback onToggle;
+  final VoidCallback? onOpenSessions;
+  final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context) => Row(

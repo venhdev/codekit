@@ -22,11 +22,13 @@ The view provides:
 
 - A text/regex search field over LOG message/source/error message and HTTP method/URI/source/error message. It does not search headers, bodies or context; body inspection retains its separate search.
 - A filter sheet opened from the app-bar Filters icon. The result count appears beneath the search bar; do not duplicate the filter control with a second Filters button in the results row.
-- While cursor pagination has more pages, the visible count is a lower bound (for example, `128+ matching`); the UI does not run a separate full-count scan on every search.
+- While cursor pagination has more pages, the visible count is a lower bound (for example, `128+ results`); the UI does not run a separate full-count scan on every search.
 - Multi-select status chips for `1xx`, `2xx`, `3xx`, `4xx`, `5xx`, and `Unknown` (missing/out-of-range HTTP status and app logs); a from/to time range; duration categories (`fast`, `normal`, `warn`, `slow`, and no-duration); and record type (`app log` or `HTTP`).
-- The main list has two modes. **List-only** is the default: rows open details and do not show checkboxes or bulk actions. Long-pressing a row enters **Selection** mode and selects that row. Selection mode shows checkboxes, a selected count, and bulk export/delete actions; the leading action becomes Close (`X`) and clears selection on exit. Row taps then toggle selection. It has no Done or app-bar multi-select action.
+- The main list has two modes. **List-only** is the default: rows open details and do not show checkboxes or bulk actions. Long-pressing a row enters **Selection** mode and selects that row. Selection mode keeps search and filter controls in place, shows the total selected count (including IDs outside the current list), and marks selected rows with an outline instead of row checkboxes. Row taps toggle selection. The leading action becomes Close (`X`) and clears selection on exit. It has no Done or app-bar multi-select action.
 - Pull-to-refresh reloads the list in list-only mode. Reload has the same result and remains beside Search history for an explicit refresh.
-- Explicit export actions for selected records or all records matching the current search and filters are available only in Selection mode. Searching or filtering alone does not export data.
+- Selection mode has one full-width bottom action row: a tri-state checkbox, an expanding filled Share button with a share icon, and a delete icon with error-container colors. Share opens Confirm Export for all selected IDs. Delete confirms the selected count. Both are disabled when nothing is selected or an action is busy; searching or filtering alone does not export data.
+
+The checkbox reflects the loaded list only: checked when all its IDs are selected, indeterminate when some are selected, and unchecked when none are selected (including an empty list). Clicking an unchecked/indeterminate checkbox adds all loaded IDs; clicking a checked checkbox removes only loaded IDs. IDs outside the list remain selected. No hidden page scan runs for this control; loading another page recalculates its state. An empty-list checkbox is disabled.
 
 Recent searches can be reapplied from Search history. Search regex is a view filter; endpoint exclusion regex prevents capture and does not select export results.
 
@@ -35,13 +37,13 @@ Rows use distinct layouts by record type:
 - **HTTP:** the first line shows record type, status code, duration, and timestamp. Duration is shown as a value such as `42 ms`; its chip background color represents the duration level. The second line shows method and URI, with the method/URI area limited to two lines. A concise request/response summary may follow when available. The stable record ID is available in record details.
 - **App log:** show type and log level with timestamp, followed by a concise message preview and source when available.
 
-Changing search/filter or reloading clears the record selection, avoiding invisible selected records.
+Changing search/filter, reloading or changing Trace scope preserves selected IDs. Successful deletion removes the deleted IDs from selection; cancellation/failure preserves selection. Leaving Selection mode clears selection. Share/Delete operate on a captured selected-ID list, including IDs hidden by the current query, and never include unselected matches.
 
-Tapping a row opens its record details. In Selection mode, its row or checkbox independently adds or removes the record from the current multi-selection; there is no persistent preview pane on the main screen.
+Tapping a row opens its record details. In Selection mode, tapping the row adds or removes the record from the current multi-selection; selected rows are outlined instead of showing checkboxes. There is no persistent preview pane on the main screen.
 
 ## Record details and HTTP inspector
 
-HTTP details keep the request/response summary (method, URI, status, duration, start time, source and error) above **Request** and **Response** tabs. Each tab owns only its corresponding headers and body. Headers start collapsed; body starts expanded. Structured body inspection offers JSON Tree, Pretty and Raw views, search, and expand/collapse controls. Non-JSON content remains viewable without requiring JSON parsing. If body capture was disabled, unsupported by the client, data was not captured, or values were redacted, the UI communicates the available state rather than reading data again from the network or local files.
+HTTP details have **Summary**, **Request** and **Response** tabs in that order, with Summary initially active. The tab bar stays above a bounded tab viewport; each tab scrolls independently. Summary contains method, the complete URI including query, status, duration, start time, source, error and Copy cURL. Long URI/error text cannot push tabs out of view. Request/Response tabs own their corresponding headers and body. Headers start collapsed; body starts expanded. Structured body inspection offers JSON Tree, Pretty and Raw views, search, and expand/collapse controls. Non-JSON content remains viewable without requiring JSON parsing. If body capture was disabled, unsupported by the client, data was not captured, or values were redacted, the UI communicates the available state rather than reading data again from the network or local files.
 
 Record ID, recorded timestamp and record mode are intentionally not shown in the detail body. The app-bar information action opens a dialog containing that package metadata. Copy headers is shown only when the tab has headers; Copy body is shown only for a captured, nonempty body. Copy cURL remains available from the HTTP summary.
 
@@ -59,7 +61,7 @@ Redacted is selected by default and file creation is unchecked. Export is unlimi
 
 ## Trace sessions
 
-The records status row has quick Trace controls: its Trace chip opens the sessions sheet, its adjacent Start/Stop control toggles manual capture, and an active chip shows the count of accepted IDs in the current capture. In Selection mode, the count remains visible when active but controls are read-only. The Trace sessions bottom sheet is 55% of the viewport height and scrolls its contents. It lists saved sessions, offers a create action, and exposes manual Start/Stop capture controls. Tapping a session scopes the records view to its saved IDs; active search and filters are intersected with that scope, and All matching export remains scoped. A session can be exported directly from the list or explicitly deleted through its actions menu after confirmation. Creating a picker-based session selects an inclusive time interval `[from, to]`, previews the currently queryable record count, and references all retained diagnostic record IDs in that interval.
+The records status row keeps the results count at the left and Trace controls/session scope at the far right. The Trace chip opens the sessions sheet, its adjacent Start/Stop control toggles manual capture, and an active chip shows the count of accepted IDs in the current capture. In Selection mode, the count remains visible when active but controls are read-only. Active filters are indicated on the Filters app-bar icon. The Trace sessions bottom sheet is 55% of the viewport height and scrolls its contents. It lists saved sessions, offers a create action, and exposes manual Start/Stop capture controls. Tapping a session scopes the records view to its saved IDs; active search and filters are intersected with that scope while previously selected IDs remain selected. A session can be exported directly from the list or explicitly deleted through its actions menu after confirmation. Creating a picker-based session selects an inclusive time interval `[from, to]`, previews the currently queryable record count, and references all retained diagnostic record IDs in that interval.
 
 Picker-created and manually captured sessions appear in the same list. Manual Stop stores the accepted ID list without waiting for persistence; picker creation uses queryable records, as specified by the [Trace lifecycle](diagnostic-data-lifecycle.md#trace-sessions). Counts shown in the session list describe saved IDs, not a guarantee of currently available records. Manual capture remains active when the sheet closes; reopening shows Stop capture.
 
@@ -75,11 +77,13 @@ Tap an item to reapply its query/mode while retaining current filters and move i
 
 ## Bottom sheets
 
-Filters, Settings, Trace sessions and Search history use the same bottom-sheet container. It opens at 55% of the viewport height, scrolls its body, includes a drag handle, can be dragged down to dismiss, and has an explicit Close control. Each feature supplies only its body and optional persistent actions.
+Filters, Settings, Trace sessions and Search history use the same bottom-sheet container. It opens at 55% of the viewport height, scrolls its body, includes a drag handle, and can be dismissed by dragging down or tapping outside. It has no explicit close icon. Each feature supplies only its body and optional persistent actions.
 
 ## Viewer settings
 
 The optional `CodeKitViewerSettings` configuration lets a host expose factual, read-only setup details in the Settings sheet (for example storage backend, attached adapters and Flutter hooks). The sheet always displays the active `RedactionPolicy`, including header presets and configured rules, as read-only data.
+
+Theme offers System, Light and Dark in one segmented control. `initialThemeMode` defaults to System, which follows platform brightness even if the host app forces a different theme. The choice applies to the viewer, record details and modal surfaces; it does not change the host app. A bubble retains the choice across viewer reopening for its lifetime; a directly mounted screen retains it for that screen's lifetime. Choices are not persisted across process restart. Status/duration chips and selection outlines remain readable in both light and dark themes.
 
 Changing record mode at runtime is opt-in through `allowRuntimeRecordModeChanges`; if enabled, the sheet offers Store raw and Redact before recording. The choice applies only to subsequently accepted records. Redaction rules, endpoint exclusions, retention, storage and adapter attachment remain host configuration and are not editable from the viewer.
 
@@ -115,7 +119,7 @@ These ASCII wireframes illustrate the agreed layout and entry points. The behavi
 │ [←] CodeKit                [tune][settings]│
 │ [Search records: text / regex ] [history][⟳]│
 ├──────────────────────────────────┤
-│ 128 matching  [Trace off] [Start]│  List-only mode
+│ 128 results   [Trace off] [Start]│  List-only mode
 ├──────────────────────────────────┤
 │ [HTTP] [500] [1820 ms] 10:42:18  │
 │ GET /users/42                    │
@@ -130,23 +134,20 @@ These ASCII wireframes illustrate the agreed layout and entry points. The behavi
 └──────────────────────────────────┘
 ```
 
-Long-pressing a row enters selection mode, selects it, and adds checkboxes, `N selected`, and the Export selected, All matching and Delete actions. Its leading Back action becomes Close (`X`); leaving mode clears selection. The duration chip background conveys its speed level; the displayed duration remains visible as text. There is no persistent preview pane.
+Long-pressing a row enters selection mode and selects it. Search and filters remain available without shifting the screen layout. Selected rows receive an outline rather than a checkbox; the bottom row contains `[checkbox] [share icon + Share (expands)] [delete icon]`. Its leading Back action becomes Close (`X`); leaving mode clears selection. The duration chip background conveys its speed level; the displayed duration remains visible as text. There is no persistent preview pane.
 
 ### HTTP details and fragment copy
 
 ```text
 ┌──────────────────────────────────┐
 │ [×] HTTP GET /users/42       [i] │
-│ GET /users/42 · Status 500        │
-│ Duration 1820 ms · [Copy cURL]    │
-│ [Request] [Response]              │
+│ [Summary] [Request] [Response]    │
 ├──────────────────────────────────┤
+│ GET https://example.test/users/42 │  Summary scrolls
 │ Status 500 · Duration 1820 ms     │
-│ ▸ Headers                         │  collapsed by default
-│ ▾ Body [Tree] [Pretty] [Raw]      │  expanded by default
-│ [Search JSON] [Expand] [Collapse] │
-│ ... body content ...             │
-│                       [Copy body]│
+│ Started ... · Source ...         │
+│ Error: ...                       │
+│ [Copy cURL]                      │
 └──────────────────────────────────┘
                  copy
                   ▼

@@ -2,7 +2,7 @@
 title: CodeKit HTTP Client Adapters
 status: active
 created: 2026-10-11
-updated: 2026-10-11
+updated: 2026-10-12
 ---
 
 # CodeKit HTTP Client Adapters
@@ -47,7 +47,7 @@ Each interceptor allocates the request/record ID before dispatch, records timing
 
 ## package:http
 
-`codekit_http` depends on codekit_core and package:http. It exposes `CodeKitHttpClient extends http.BaseClient` and `http.Client.withDiagnostics()`. BaseClient convenience methods route through send(); overriding every verb is unnecessary. The extension returns a wrapper, not the same client, and the consumer must use that returned value.
+`codekit_http` depends on codekit_core and package:http. It exposes `CodeKitHttpClient extends http.BaseClient` and `http.Client.withDiagnostics()`. The extension returns a wrapper, not the same client, and the consumer must use that returned value. Each public request method forwards to the corresponding inner-client method; convenience methods do not route through the wrapper's send().
 
 ```dart
 import 'package:http/http.dart' as http;
@@ -59,9 +59,19 @@ final client = http.Client().withDiagnostics(diagnostics);
 await client.get(Uri.parse('https://example.com/users/42'));
 ```
 
-The wrapper's `send()` tracks a logical request, delegates to inner `send()`, and submits normalized input. Calls directly through the inner client or top-level `http` functions bypass the wrapper. Retry visibility follows wrapper order: a wrapper around `RetryClient` records its final result, while a `RetryClient` around the CodeKit wrapper can submit each attempt through it. Redirects handled inside the underlying client are not exposed as separate attempts.
+The wrapper tracks one logical request per invoked method, delegates that method exactly once, and submits normalized input. It forwards the original URI, headers, body and encoding without replacing or mutating them. Calls directly through the inner client or top-level `http` functions bypass the wrapper. Retry visibility follows wrapper order: a wrapper around `RetryClient` records its final result, while a `RetryClient` around the CodeKit wrapper can submit each attempt through send(). Redirects handled inside the underlying client are not exposed as separate attempts.
 
-Request bodies already available for safe snapshotting may be captured. Multipart capture uses available fields/media metadata without reading file bytes. Streamed request bodies are not read ahead. At the approved response-headers boundary, response bodies are unsupported, including get()/post() calls that are subsequently buffered by BaseClient: the wrapper does not see that later buffering. Multipart `Content-Type` is recorded as `multipart/form-data`; the boundary added later by `package:http` finalization is not captured. It returns the original response stream and does not consume it to improve diagnostics.
+Request bodies already available for safe snapshotting may be captured. Multipart capture uses available fields/media metadata without reading file bytes. Streamed request bodies are not read ahead. Multipart `Content-Type` is recorded as `multipart/form-data`; the boundary added later by `package:http` finalization is not captured.
+
+For head/get/post/put/patch/delete, the inner client owns networking and buffering. The wrapper receives an already-completed Response, snapshots its available data, and returns that same instance, including any custom subclass and final-URL interface. It does not rebuild the response or change the inner method's status/error behavior. Request metadata is a best-effort preview of the caller's arguments, not a claim to observe additional transport headers or custom-client transformations. An unsupported preview must not reject input accepted by the inner client.
+
+Buffered body capture has no size limit and never truncates data. JSON (`application/json` or `application/*+json`) uses strict UTF-8 and is stored as structured JSON; malformed JSON with valid UTF-8 falls back to text. Text (`text/*`, `application/xml` or `*+xml`) uses the response's charset behavior. Empty buffered bodies are absent; binary/unknown content types or decode failures are unsupported. Large bodies incur proportional snapshot, redaction and storage costs; diagnostics cannot promise zero CPU/memory overhead.
+
+send() returns the original StreamedResponse and stream without creating a subscription, wrapping, draining or rebuilding them. It records status/headers at response headers, with body unsupported, even if the application never consumes the stream. Subsequent body errors, pause/resume and cancellation belong entirely to the original application stream; they do not update the completed record.
+
+read()/readBytes() forward to the exact inner methods, preserving custom overrides and original error behavior. read() captures the returned text without a size limit; readBytes() returns the original bytes but records body unsupported because no media type is exposed. These APIs expose no response status/headers; diagnostics must leave those fields unknown rather than fabricate them or issue another request.
+
+One completed record is submitted per method invocation when its inner Future completes or throws. For buffered methods this includes the inner client's body buffering; for send() it ends at headers. Duration stops before response snapshot processing. Record/Trace acceptance follows completion and snapshot preparation, not later application consumption. Snapshot/setup/recorder failures must not replace results or original errors, nor cause a second client invocation. Persistence and sink delivery are not awaited on the client path. Redaction applies to the snapshot through the core recorder/export pipeline.
 
 Capture exclusions apply before diagnostic processing. Cancellation/network failures retain the application error and produce a completed diagnostic error snapshot where possible. Snapshot models contain no live client types.
 

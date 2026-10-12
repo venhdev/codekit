@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../shared/codekit_bottom_sheet.dart';
 import 'codekit_viewer_settings.dart';
+import 'codekit_viewer_theme.dart';
 
 Future<void> showDiagnosticsSettingsSheet(
   BuildContext context, {
@@ -31,10 +32,23 @@ class _DiagnosticsSettingsSheetState extends State<_DiagnosticsSettingsSheet> {
   @override
   Widget build(BuildContext context) {
     final policy = widget.diagnostics.redactionPolicy;
+    final theme = CodeKitViewerTheme.controllerOf(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('CodeKit settings', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 16),
+        Text('Theme', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        SegmentedButton<ThemeMode>(
+          segments: const [
+            ButtonSegment(value: ThemeMode.system, label: Text('System')),
+            ButtonSegment(value: ThemeMode.light, label: Text('Light')),
+            ButtonSegment(value: ThemeMode.dark, label: Text('Dark')),
+          ],
+          selected: {theme.value},
+          onSelectionChanged: (selection) => theme.value = selection.single,
+        ),
         const SizedBox(height: 16),
         Text('Recording mode', style: Theme.of(context).textTheme.titleMedium),
         if (widget.settings.allowRuntimeRecordModeChanges)
