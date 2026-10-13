@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../export/export_confirmation_dialog.dart';
 import '../shared/codekit_bottom_sheet.dart';
+import '../shared/guarded_action.dart';
 
 Future<TraceSession?> showTraceSessionsSheet(
   BuildContext context,
@@ -35,33 +36,38 @@ class _TraceSessionsSheetState extends State<_TraceSessionsSheet> {
 
   Future<void> _reload() async {
     setState(() => _loading = true);
-    try {
-      final sessions = await widget.diagnostics.listTraceSessions();
-      if (mounted) {
-        setState(() {
-          _sessions = sessions;
-          _error = null;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _error = 'Could not load Trace sessions');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+    await guardAction(
+      () async {
+        final sessions = await widget.diagnostics.listTraceSessions();
+        if (mounted) {
+          setState(() {
+            _sessions = sessions;
+            _error = null;
+          });
+        }
+      },
+      onError: (e, st) {
+        if (mounted) setState(() => _error = 'Could not load Trace sessions');
+      },
+    );
+    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _toggleTrace() async {
-    try {
-      if (_active) {
-        await widget.diagnostics.stopTrace();
-      } else {
-        widget.diagnostics.startTrace();
-      }
-      if (mounted) setState(() => _active = !_active);
-      if (!_active) await _reload();
-    } catch (_) {
-      if (mounted) setState(() => _error = 'Trace action failed');
-    }
+    await guardAction(
+      () async {
+        if (_active) {
+          await widget.diagnostics.stopTrace();
+        } else {
+          widget.diagnostics.startTrace();
+        }
+        if (mounted) setState(() => _active = !_active);
+        if (!_active) await _reload();
+      },
+      onError: (e, st) {
+        if (mounted) setState(() => _error = 'Trace action failed');
+      },
+    );
   }
 
   Future<DateTime?> _pickDateTime(DateTime initial) async {
@@ -159,61 +165,67 @@ class _TraceSessionsSheetState extends State<_TraceSessionsSheet> {
       ),
     );
     if (chosen == null) return;
-    try {
-      final session = await widget.diagnostics.createTraceSession(
-        from: chosen.$1,
-        to: chosen.$2,
-      );
-      if (session == null && mounted) {
-        setState(() => _error = 'No records in that time range');
-      }
-      await _reload();
-    } catch (_) {
-      if (mounted) setState(() => _error = 'Could not create Trace session');
-    }
+    await guardAction(
+      () async {
+        final session = await widget.diagnostics.createTraceSession(
+          from: chosen.$1,
+          to: chosen.$2,
+        );
+        if (session == null && mounted) {
+          setState(() => _error = 'No records in that time range');
+        }
+        await _reload();
+      },
+      onError: (e, st) {
+        if (mounted) setState(() => _error = 'Could not create Trace session');
+      },
+    );
   }
 
   Future<void> _export(TraceSession session) async {
-    try {
-      final available = await widget.diagnostics.getByIds(session.recordIds);
-      if (!mounted) return;
-      if (available.isEmpty) {
-        final delete = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('No records available'),
-            content: const Text(
-              'None of this session’s saved IDs currently resolve to records.',
+    await guardAction(
+      () async {
+        final available = await widget.diagnostics.getByIds(session.recordIds);
+        if (!mounted) return;
+        if (available.isEmpty) {
+          final delete = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('No records available'),
+              content: const Text(
+                'None of this session’s saved IDs currently resolve to records.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Delete session'),
+                ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Delete session'),
-              ),
-            ],
+          );
+          if (delete == true) {
+            await widget.diagnostics.deleteTraceSession(session.id);
+            await _reload();
+          }
+          return;
+        }
+        await showExportConfirmation(
+          context,
+          selectedCount: available.length,
+          export: (representation) => widget.diagnostics.exportTraceSession(
+            session.id,
+            representation: representation,
           ),
         );
-        if (delete == true) {
-          await widget.diagnostics.deleteTraceSession(session.id);
-          await _reload();
-        }
-        return;
-      }
-      await showExportConfirmation(
-        context,
-        selectedCount: available.length,
-        export: (representation) => widget.diagnostics.exportTraceSession(
-          session.id,
-          representation: representation,
-        ),
-      );
-    } catch (_) {
-      if (mounted) setState(() => _error = 'Could not export Trace session');
-    }
+      },
+      onError: (e, st) {
+        if (mounted) setState(() => _error = 'Could not export Trace session');
+      },
+    );
   }
 
   Future<void> _deleteSession(TraceSession session) async {
@@ -235,12 +247,15 @@ class _TraceSessionsSheetState extends State<_TraceSessionsSheet> {
       ),
     );
     if (confirmed != true) return;
-    try {
-      await widget.diagnostics.deleteTraceSession(session.id);
-      await _reload();
-    } catch (_) {
-      if (mounted) setState(() => _error = 'Could not delete Trace session');
-    }
+    await guardAction(
+      () async {
+        await widget.diagnostics.deleteTraceSession(session.id);
+        await _reload();
+      },
+      onError: (e, st) {
+        if (mounted) setState(() => _error = 'Could not delete Trace session');
+      },
+    );
   }
 
   @override

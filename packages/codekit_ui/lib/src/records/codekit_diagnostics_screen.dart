@@ -11,6 +11,7 @@ import '../settings/codekit_viewer_settings.dart';
 import '../settings/diagnostics_settings_sheet.dart';
 import '../settings/codekit_viewer_theme.dart';
 import '../traces/trace_sessions_sheet.dart';
+import '../shared/guarded_action.dart';
 import 'diagnostic_record_tile.dart';
 import 'filters_sheet.dart';
 import 'records_controller.dart';
@@ -192,16 +193,21 @@ class _DiagnosticsRecordsScreenState extends State<_DiagnosticsRecordsScreen> {
         _message('No records selected');
         return;
       }
-      await showExportConfirmation(
-        context,
-        selectedCount: ids.length,
-        export: (representation) => widget.diagnostics.exportRecords(
-          ids,
-          representation: representation,
-        ),
+      await guardAction(
+        () async {
+          await showExportConfirmation(
+            context,
+            selectedCount: ids.length,
+            export: (representation) => widget.diagnostics.exportRecords(
+              ids,
+              representation: representation,
+            ),
+          );
+        },
+        onError: (e, st) {
+          if (mounted) _message('Could not export selected records');
+        },
       );
-    } catch (_) {
-      if (mounted) _message('Could not export selected records');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -231,12 +237,17 @@ class _DiagnosticsRecordsScreenState extends State<_DiagnosticsRecordsScreen> {
         ),
       );
       if (confirmed != true || !mounted) return;
-      await widget.diagnostics.deleteByIds(ids);
-      if (!mounted) return;
-      _controller.removeSelected(ids);
-      await _controller.reload();
-    } catch (_) {
-      if (mounted) _message('Delete failed');
+      await guardAction(
+        () async {
+          await widget.diagnostics.deleteByIds(ids);
+          if (!mounted) return;
+          _controller.removeSelected(ids);
+          await _controller.reload();
+        },
+        onError: (e, st) {
+          if (mounted) _message('Delete failed');
+        },
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }

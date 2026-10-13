@@ -2,6 +2,7 @@ import 'package:codekit_core/codekit_core.dart';
 import 'package:flutter/foundation.dart';
 
 import '../search_history/search_history_store.dart';
+import '../shared/guarded_action.dart';
 
 /// Screen state around the public, cursor-based diagnostics query API.
 class RecordsController extends ChangeNotifier {
@@ -75,14 +76,19 @@ class RecordsController extends ChangeNotifier {
     loading = true;
     notifyListeners();
     try {
-      final saved = await diagnostics.getByIds(_traceRecordIds!);
-      if (generation != _generation) return;
-      final query = _query();
-      records = List.unmodifiable(saved.where(query.matches));
-      hasMore = false;
-      error = null;
-    } catch (_) {
-      if (generation == _generation) error = 'Could not load Trace session';
+      await guardAction(
+        () async {
+          final saved = await diagnostics.getByIds(_traceRecordIds!);
+          if (generation != _generation) return;
+          final query = _query();
+          records = List.unmodifiable(saved.where(query.matches));
+          hasMore = false;
+          error = null;
+        },
+        onError: (e, st) {
+          if (generation == _generation) error = 'Could not load Trace session';
+        },
+      );
     } finally {
       if (generation == _generation) {
         loading = false;
@@ -98,14 +104,19 @@ class RecordsController extends ChangeNotifier {
     loading = true;
     notifyListeners();
     try {
-      final page = await diagnostics.query(_query(cursor: cursor));
-      if (generation != _generation) return;
-      records = List.unmodifiable([...records, ...page.records]);
-      _cursor = page.nextCursor;
-      hasMore = _cursor != null;
-      error = null;
-    } catch (_) {
-      if (generation == _generation) error = 'Could not load records';
+      await guardAction(
+        () async {
+          final page = await diagnostics.query(_query(cursor: cursor));
+          if (generation != _generation) return;
+          records = List.unmodifiable([...records, ...page.records]);
+          _cursor = page.nextCursor;
+          hasMore = _cursor != null;
+          error = null;
+        },
+        onError: (e, st) {
+          if (generation == _generation) error = 'Could not load records';
+        },
+      );
     } finally {
       if (generation == _generation) {
         loading = false;

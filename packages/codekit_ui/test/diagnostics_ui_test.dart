@@ -9,6 +9,7 @@ import 'package:codekit_ui/src/record_details/record_details_screen.dart';
 import 'package:codekit_ui/src/records/records_controller.dart';
 import 'package:codekit_ui/src/search_history/search_history_store.dart';
 import 'package:codekit_ui/src/shared/codekit_bottom_sheet.dart';
+import 'package:codekit_ui/src/traces/trace_sessions_sheet.dart';
 
 void main() {
   testWidgets('long HTTP summary keeps tabs visible on a small screen', (
@@ -665,6 +666,62 @@ void main() {
       expect(find.text('Record information'), findsOneWidget);
       expect(find.textContaining('ID:'), findsOneWidget);
       await diagnostics.dispose();
+    },
+  );
+
+  testWidgets(
+    'failing trace or export action displays error message and does not crash',
+    (tester) async {
+      final diagnostics = CodeKitDiagnostics();
+      addTearDown(diagnostics.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => showTraceSessionsSheet(context, diagnostics),
+                child: const Text('Open traces'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open traces'));
+      await tester.pumpAndSettle();
+      expect(find.text('Trace sessions'), findsOneWidget);
+
+      // Close the trace sessions bottom sheet
+      await tester.tapAt(const Offset(20, 20));
+      await tester.pumpAndSettle();
+      expect(find.text('Trace sessions'), findsNothing);
+
+      // Verify showExportConfirmation error path
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => showExportConfirmation(
+                  context,
+                  selectedCount: 1,
+                  export: (_) async => throw StateError('Simulated export error'),
+                ),
+                child: const Text('Open export'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open export'));
+      await tester.pumpAndSettle();
+      expect(find.text('Confirm export'), findsOneWidget);
+
+      // Tap COPY button to trigger failing export action
+      await tester.tap(find.text('COPY'));
+      await tester.pumpAndSettle();
+      expect(find.text('Copy failed'), findsOneWidget);
     },
   );
 }

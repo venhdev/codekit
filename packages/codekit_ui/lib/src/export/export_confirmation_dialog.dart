@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../platform/export_delivery.dart';
+import '../shared/guarded_action.dart';
 
 /// Confirms the representation at the point where data leaves CodeKit.
 Future<void> showExportConfirmation(
@@ -37,41 +38,46 @@ class _ExportConfirmationState extends State<_ExportConfirmation> {
       error = null;
     });
     try {
-      final result = await widget.export(representation);
-      if (result.status != ExportStatus.success || result.text == null) {
-        if (mounted) {
-          setState(
-            () => error = result.status == ExportStatus.empty
-                ? 'No records available'
-                : result.error ?? 'Export failed',
-          );
-        }
-        return;
-      }
-      if (share) {
-        final bool delivered;
-        if (asFile) {
-          delivered = await shareDiagnosticFile(result.text!);
-        } else {
-          delivered = await shareDiagnosticText(result.text!);
-        }
-        if (!delivered) return;
-      } else {
-        await Clipboard.setData(ClipboardData(text: result.text!));
-      }
-      if (mounted) {
-        final messenger = ScaffoldMessenger.of(context);
-        Navigator.of(context).pop();
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(share ? 'Shared diagnostics' : 'Copied diagnostics'),
-          ),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => error = share ? 'Share unavailable' : 'Copy failed');
-      }
+      await guardAction(
+        () async {
+          final result = await widget.export(representation);
+          if (result.status != ExportStatus.success || result.text == null) {
+            if (mounted) {
+              setState(
+                () => error = result.status == ExportStatus.empty
+                    ? 'No records available'
+                    : result.error ?? 'Export failed',
+              );
+            }
+            return;
+          }
+          if (share) {
+            final bool delivered;
+            if (asFile) {
+              delivered = await shareDiagnosticFile(result.text!);
+            } else {
+              delivered = await shareDiagnosticText(result.text!);
+            }
+            if (!delivered) return;
+          } else {
+            await Clipboard.setData(ClipboardData(text: result.text!));
+          }
+          if (mounted) {
+            final messenger = ScaffoldMessenger.of(context);
+            Navigator.of(context).pop();
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(share ? 'Shared diagnostics' : 'Copied diagnostics'),
+              ),
+            );
+          }
+        },
+        onError: (e, st) {
+          if (mounted) {
+            setState(() => error = share ? 'Share unavailable' : 'Copy failed');
+          }
+        },
+      );
     } finally {
       if (mounted) setState(() => busy = false);
     }

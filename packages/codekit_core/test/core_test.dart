@@ -675,4 +675,65 @@ void main() {
       expect(curl.text, isNot(contains('--data-raw')));
     },
   );
+  test(
+    'memory store returning failing Future drops record with storageFailed and warns',
+    () async {
+      final warnings = <DiagnosticWarning>[];
+      final fakeMemoryStore = _AsyncFailingMemoryStore();
+      final d = CodeKitDiagnostics(
+        store: fakeMemoryStore,
+        onWarning: warnings.add,
+      );
+      addTearDown(d.dispose);
+      final receipt = d.log(const LogInput(message: 'test'));
+      expect(receipt.accepted, isFalse);
+      expect(receipt.dropReason, RecordDropReason.storageFailed);
+      await pumpEventQueue();
+      expect(
+        warnings.any((w) => w.code == 'storage_async_violation'),
+        isTrue,
+      );
+    },
+  );
+}
+
+class _AsyncFailingMemoryStore implements DiagnosticStore {
+  @override
+  StorageKind get kind => StorageKind.memory;
+
+  @override
+  Future<void> appendAndRetain(
+    DiagnosticRecord record, {
+    required RetentionPolicy retention,
+  }) async {
+    throw StateError('Asynchronous memory store error');
+  }
+
+  @override
+  Future<DiagnosticRecord?> getById(String id) async => null;
+
+  @override
+  Future<List<DiagnosticRecord>> getByIds(List<String> ids) async => const [];
+
+  @override
+  Future<RecordPage> query(RecordQuery query) async =>
+      RecordPage(const [], null);
+
+  @override
+  Future<int> deleteByIds(List<String> ids) async => 0;
+
+  @override
+  Future<int> clearRecords() async => 0;
+
+  @override
+  Future<void> saveTraceSession(TraceSession session) async {}
+
+  @override
+  Future<List<TraceSession>> listTraceSessions() async => const [];
+
+  @override
+  Future<bool> deleteTraceSession(String id) async => false;
+
+  @override
+  Future<void> close() async {}
 }

@@ -228,7 +228,11 @@ class CodeKitDiagnostics {
       try {
         final operation = _store.appendAndRetain(stored, retention: retention);
         if (operation is Future<void>) {
-          unawaited(operation.catchError((Object e, StackTrace st) {}));
+          unawaited(
+            operation.catchError((Object e, StackTrace st) {
+              _warn('storage_async_violation', 'Memory store write failed: $e');
+            }),
+          );
           throw StateError('Memory store must write synchronously');
         }
         receipt._complete();
