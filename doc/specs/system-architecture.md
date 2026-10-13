@@ -3,7 +3,7 @@ title: CodeKit System Architecture
 description: Authoritative package topology, dependency direction, and source layout for the CodeKit diagnostics ecosystem.
 status: active
 created: 2026-10-10
-updated: 2026-10-11
+updated: 2026-10-13
 ---
 
 # CodeKit System Architecture
@@ -58,16 +58,17 @@ The [public API](public-api.md) owns entrypoint names, setup composition, receip
 
 | Package | Responsibility | Dependency boundary |
 | --- | --- | --- |
-| `codekit_core` | Shared models, recorder, memory store, retention, redaction, sessions, query/export and sink contracts | General-purpose Dart; no Flutter or concrete storage dependency. |
+| `codekit_core` | Shared models (including DevProxyConfig), recorder, memory store, retention, redaction, sessions, query/export and sink contracts | General-purpose Dart; no Flutter or concrete storage dependency. |
 | `codekit` | Umbrella, convenient configuration and selected Dart defaults | Core and explicitly selected platform-compatible defaults. |
-| `codekit_ui` | Bubble, viewer, HTTP/JSON details and platform share/download | Core and Flutter; no error-hook ownership. |
+| `codekit_ui` | Bubble, viewer, HTTP/JSON details, dev proxy controls, and platform share/download | Core and Flutter; no error-hook ownership. |
 | `codekit_flutter` | Optional Flutter framework and root-isolate error hooks | Core and Flutter; no viewer or share dependency. |
-| `codekit_dio` | Dio capture, interceptor and withDiagnostics extension | Core and Dio. |
-| `codekit_http` | package:http capture, BaseClient wrapper and withDiagnostics extension | Core and package:http; independent of webhook delivery. |
+| `codekit_dio` | Dio capture, interceptor, withDiagnostics extension, dev proxy adapter, and turnkey factory | Core and Dio. |
+| `codekit_http` | package:http capture, BaseClient wrapper, withDiagnostics extension, dev proxy client, and turnkey factory | Core and package:http; independent of webhook delivery. |
 | `codekit_drift_diagnostic_store` | Native Drift persistence, schema, explicit migrations and platform opening | Core and Drift; optional and not pulled into the umbrella. |
 | `codekit_webhook` | Discord and Telegram formatting, policies and outbound delivery | Core contracts; optional client-neutral `WebhookTransport`; package:http is the default internal client. |
 | `colored_logger` | Reusable ANSI color formatting, with a plain-text Web fallback | Dart package; no CodeKit dependency. |
 | `codekit_console` | Optional colored console sink for diagnostic records | Core and `colored_logger`; no UI or network dependency. |
+
 
 Models, redaction and sessions stay in core instead of separate publishable packages. The `type_caster` package is not a required core dependency. HTTP adapter contracts are owned by [HTTP client adapters](http-client-adapters.md).
 

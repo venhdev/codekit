@@ -3,7 +3,7 @@ title: CodeKit Diagnostics UI
 description: First UI contract for inspecting diagnostic records, managing Trace sessions, exporting records, and reusing recent searches.
 status: active
 created: 2026-10-10
-updated: 2026-10-12
+updated: 2026-10-13
 ---
 
 # CodeKit Diagnostics UI
@@ -293,3 +293,26 @@ Tap a row to reuse its query and mode; existing filters remain unchanged.
 ```
 
 The `1xx` and `Unknown` chips use neutral colors. The CodeKit bubble is placed in `MaterialApp.builder` with the same `navigatorKey` as the app; it remains available across app routes and is hidden while the viewer is open.
+
+## Dev proxy card and dialog
+
+`codekit_ui` exports embeddable developer proxy widgets that applications can integrate into their debug screens or developer dashboards.
+
+### CodeKitProxyCard
+
+`CodeKitProxyCard` presents:
+- Title (default: `Dev Proxy (Proxyman / Charles)`).
+- Subtitle displaying current status: `ON: PROXY <host>:<port>` when active and valid, or `OFF: DIRECT (No proxy)`.
+- A toggle switch (`SwitchListTile`). Toggling the switch when the host is unconfigured automatically opens the configuration dialog.
+- An action button (`Configure Host & Port`) opening `CodeKitProxyDialog`.
+- `onConfigChanged` callback passing updated `DevProxyConfig` to the caller.
+
+### CodeKitProxyDialog
+
+`CodeKitProxyDialog` (or `showCodeKitProxyDialog`) provides:
+- Host/IP input field.
+- Port input field.
+- Port preset chips: `9090 (Proxyman)`, `8888 (Charles)`, `8080 (Mitmproxy)`. Tapping a preset chip updates the port text field.
+- Validation: requires non-empty host and port within allowable boundaries (1–65535).
+- Returns updated `DevProxyConfig` with `isEnabled: true` upon Save.
+

@@ -20,9 +20,12 @@ can be selected independently; storage and record mode each require one choice.
 Diagnostic sinks can be combined.
 
 ```text
-HTTP capture (choose independently)
-[ ] Dio
-[ ] package:http
+HTTP client capture & dev proxy (choose independently)
+[ ] Dio (interceptor capture, attachDevProxy, createCodeKitDio turnkey factory)
+[ ] package:http (wrapper capture, createDevProxyHttpClient, createCodeKitHttpClient turnkey factory)
+
+Dev proxy controls (optional)
+[ ] Embeddable proxy card and preset dialog (Proxyman, Charles, Mitmproxy)
 
 Storage (choose one)
 [ ] In-memory (default)
@@ -46,15 +49,16 @@ Record mode (choose one)
 
 | Package | Add it when | Platform/dependency notes |
 | --- | --- | --- |
-| `codekit_core` | Always; it owns records, the recorder, redaction, storage contracts, query/export, and sink contracts | Pure Dart; no Flutter or HTTP-client dependency |
+| `codekit_core` | Always; it owns records, the recorder, redaction, storage contracts, query/export, sink contracts, and the `DevProxyConfig` model | Pure Dart; no Flutter or HTTP-client dependency |
 | `codekit` | A Dart app wants one convenient import for core plus the colored console sink | It re-exports `codekit_core` and `codekit_console`; it is not a global singleton and does not add the optional adapters |
 | `codekit_console` | Colored diagnostic output is selected | Uses `colored_logger`; ANSI is used when supported, with plain-text fallback on Web |
-| `codekit_dio` | The app sends requests with Dio | Add Dio separately; use the app's configured instance |
-| `codekit_http` | The app sends requests with `package:http` | Add `http` separately; use the returned wrapper |
+| `codekit_dio` | The app sends requests with Dio or needs Dio dev proxy routing | Add Dio separately; exposes `withDiagnostics`, `attachDevProxy`, and `createCodeKitDio` |
+| `codekit_http` | The app sends requests with `package:http` or needs HTTP dev proxy routing | Add `http` separately; exposes wrapper, `createDevProxyHttpClient`, and `createCodeKitHttpClient` |
 | `codekit_drift_diagnostic_store` | Records must persist across process restarts | Native SQLite for Android, iOS, and desktop; use memory on Web in this MVP |
 | `codekit_webhook` | Records should be sent to Discord and/or Telegram | Requires network access; credentials must not be embedded in a public client app |
 | `codekit_flutter` | Flutter framework and root-isolate errors should be recorded | Installs process-global handlers explicitly |
-| `codekit_ui` | The app needs the in-app records viewer, Trace controls, settings, and export UI | Flutter UI; does not create or own the diagnostics instance |
+| `codekit_ui` | The app needs the in-app records viewer, Trace controls, settings, export UI, or dev proxy cards | Flutter UI; does not create or own the diagnostics instance |
+
 
 The app creates one `CodeKitDiagnostics` instance and passes that same instance
 to every selected producer and UI. Core has no default global instance. Sinks
@@ -602,7 +606,74 @@ separate records.
 - File metadata can include name, content type, size, and possibly local path
   depending on the producer. Treat paths and metadata as sensitive too.
 
+### Dev proxy tooling and turnkey client factories
+
+Both `codekit_dio` and `codekit_http` support developer proxy routing for local inspection tools such as Proxyman (port 9090), Charles (port 8888), and Mitmproxy (port 8080).
+
+#### Domain model (`DevProxyConfig`)
+
+`DevProxyConfig` is a pure-Dart immutable value object defined in `codekit_core`:
+
+```dart
+import 'package:codekit_core/codekit_core.dart';
+
+const config = DevProxyConfig(
+  isEnabled: true,
+  host: '192.168.1.50',
+  port: 9090,
+);
+```
+
+- **Host sanitization**: `sanitizedHost` strips case-insensitive `http://` / `https://` schemes, trailing paths, and port colons, preventing formatting failures when pasting full URLs.
+- **Validity check**: `isValid` checks that `sanitizedHost` is non-empty and port is within `1–65535`.
+- **PAC directive**: `proxyDirective` formats `PROXY <host>:<port>` when active and valid; otherwise `DIRECT`.
+
+#### Dynamic per-request resolution (zero-rebuild)
+
+Both Dio and `package:http` accept a synchronous callback `proxyProvider: () => currentConfig`. `HttpClient.findProxy` queries this callback synchronously on every request. Updating proxy state in memory or persistent storage affects the next HTTP request immediately without recreating client instances or resetting connection pools.
+
+#### SSL certificate validation priority chain
+
+Transport options (`DevProxyDioOptions` and `DevProxyHttpOptions`) guard self-signed MITM certificates (used by Proxyman/Charles) with a strict priority order:
+
+1. **Custom developer callback**: `badCertificateCallback` is invoked first if provided. Use this to inspect certificate chains, verify specific issuer CAs (e.g., Proxyman CA), or enforce dev pinning rules.
+2. **Built-in MITM bypass**: Returns `true` only when `proxy.isEnabled && proxy.isValid`, `allowBadCertificates` is `true`, and `isDebug` is `true`.
+3. **Default secure reject**: Rejects invalid certificates (`false`).
+
+The `isDebug` gate defaults to `!bool.fromEnvironment('dart.vm.product')` (evaluates to `false` in production AOT builds). Callers can supply any custom condition, such as `kDebugMode` or `const bool.fromEnvironment('ENABLE_DEV_PROXY')`.
+
+#### Turnkey client factories
+
+For standard applications, turnkey factories provide one-stop initialization combining BaseOptions, Diagnostics tracking, Dev Proxy routing, and custom interceptors:
+
+```dart
+// Turnkey Dio client:
+final dio = createCodeKitDio(
+  options: BaseOptions(baseUrl: 'https://api.example.com'),
+  diagnostics: diagnostics,
+  proxyProvider: () => devProxyState,
+  devProxyOptions: DevProxyDioOptions(
+    allowBadCertificates: true,
+    isDebug: const bool.fromEnvironment('ENABLE_DEV_TOOLS', defaultValue: false),
+    badCertificateCallback: (cert, host, port) => cert.issuer.contains('Proxyman'),
+  ),
+  interceptors: [AuthInterceptor()],
+);
+
+// Turnkey package:http client:
+final httpClient = createCodeKitHttpClient(
+  diagnostics: diagnostics,
+  proxyProvider: () => devProxyState,
+  devProxyOptions: const DevProxyHttpOptions.permissiveDebug(),
+);
+```
+
+For applications with existing dependency-injection pipelines, composable primitives remain available:
+- **Dio**: `dio.attachDevProxy(proxyProvider: ..., options: ...)`
+- **package:http**: `createDevProxyHttpClient(proxyProvider: ..., options: ...)`
+
 ## 9. Flutter error hooks
+
 
 Configure the app's own handlers first, then install CodeKit's optional global
 hooks:
@@ -751,7 +822,31 @@ Use this when the app wants to control the route itself instead of displaying
 the floating bubble. A custom route still uses the same diagnostics object and
 does not take ownership of it.
 
+### Embeddable dev proxy card and dialog
+
+`codekit_ui` exports ready-to-use widgets to monitor, toggle, and configure developer HTTP proxy settings in debug menus, settings screens, or developer dashboards:
+
+```dart
+import 'package:codekit_core/codekit_core.dart';
+import 'package:codekit_ui/codekit_ui.dart';
+import 'package:flutter/material.dart';
+
+// In your developer dashboard or debug settings screen:
+CodeKitProxyCard(
+  config: devProxyConfig,
+  onConfigChanged: (updatedConfig) {
+    setState(() => devProxyConfig = updatedConfig);
+    // Persist to preferences or secure storage if desired.
+  },
+);
+```
+
+- **Status display**: Card shows `ON: PROXY <host>:<port>` when active and valid, or `OFF: DIRECT (No proxy)`.
+- **Toggle behavior**: A `SwitchListTile` toggles proxy routing on or off. Toggling on while the host is unconfigured automatically opens `CodeKitProxyDialog`.
+- **Preset chips dialog**: `CodeKitProxyDialog` (or `showCodeKitProxyDialog`) provides LAN host input, port input, and port presets: `9090 (Proxyman)`, `8888 (Charles)`, and `8080 (Mitmproxy)`. Tapping a preset chip updates the port field immediately. It validates that the host is non-empty and the port is within `1–65535`.
+
 ## 11. Query, Trace, delete, and export without the viewer
+
 
 The app can use core APIs directly or build a custom UI.
 
@@ -1014,6 +1109,16 @@ An agent implementing the checked features should follow this sequence:
   a size limit. send() preserves the original response/stream and records once
   at headers; streamed response bodies remain unsupported.
 - Tests verify the response stream remains readable by the application.
+- Dev proxy routing queries `proxyProvider` synchronously per request;
+  `DevProxyConfig` produces `PROXY <host>:<port>` when enabled and valid, or
+  `DIRECT` when disabled or empty. Scheme prefixes (`http://`, `https://`) are
+  stripped case-insensitively.
+- SSL certificate bypass enforces the 3-tier priority: custom
+  `badCertificateCallback` first, built-in bypass only when enabled, valid,
+  `allowBadCertificates: true`, and `isDebug: true`, defaulting to rejection.
+- Turnkey factories (`createCodeKitDio` and `createCodeKitHttpClient`) correctly
+  compose base options, diagnostics recording, dev proxy routing, and custom
+  interceptors, gracefully falling back to direct clients when proxy is omitted.
 
 ### Storage and lifecycle
 
@@ -1111,6 +1216,11 @@ never real service credentials.
   behavior.
 - Test copy/share/file delivery with platform fakes; device share sheets still
   need native device QA where the app requires it.
+- Verify `CodeKitProxyCard` displays PROXY/DIRECT status, triggers state changes
+  via `onConfigChanged`, and automatically opens `CodeKitProxyDialog` when
+  toggling on with an unconfigured host.
+- Verify `CodeKitProxyDialog` updates port via preset chips (9090, 8888, 8080),
+  validates non-empty host and valid port (1–65535), and invokes `onSave`.
 
 ## 15. Ready-to-use coding-agent prompt
 
@@ -1140,6 +1250,11 @@ Flutter integrations (choose independently)
 - [ ] In-app diagnostics viewer
 - [ ] Flutter framework and root-isolate error capture
 
+Dev proxy tooling (choose independently)
+- [ ] Dio dev proxy routing
+- [ ] package:http dev proxy routing
+- [ ] Embeddable proxy card & dialog (Flutter UI)
+
 Record mode (choose one)
 - [ ] Redact before recording
 - [ ] Store raw
@@ -1166,6 +1281,10 @@ Implementation rules:
 - Deliberately choose storage, count retention, redaction policy, URI exclusion,
   and record mode. Remember: Store raw is the default; exports default to
   Redacted; redaction cannot guarantee discovery of every secret.
+- If dev proxy tooling is selected, provide `proxyProvider`, guard
+  `allowBadCertificates` (`false` by default) with an explicit `isDebug` check,
+  and optionally use turnkey factories (`createCodeKitDio` or
+  `createCodeKitHttpClient`). Embed `CodeKitProxyCard` in dev/QA screens.
 - If Drift is selected, use a host-chosen native database path; Web uses
   memory in this MVP. Do not claim dispose flushes pending writes.
 - If a webhook is selected, set explicit dispatch policies, keep credentials

@@ -32,5 +32,6 @@ export 'src/redaction/redaction.dart'
         TextRedactionRule,
         HeaderTarget,
         redactionMarker;
+export 'src/proxy/dev_proxy_config.dart';
 export 'src/sinks/sinks.dart';
 export 'src/storage/storage.dart';

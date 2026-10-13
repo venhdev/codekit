@@ -56,14 +56,15 @@ final class QaServices {
     final hooks = CodeKitFlutterErrorHooks.install(diagnostics);
     return QaServices._(
       diagnostics: diagnostics,
-      dio: Dio(
-        BaseOptions(
+      dio: createCodeKitDio(
+        options: BaseOptions(
           connectTimeout: const Duration(seconds: 10),
           receiveTimeout: const Duration(seconds: 10),
           sendTimeout: const Duration(seconds: 10),
         ),
-      ).withDiagnostics(diagnostics),
-      httpClient: http.Client().withDiagnostics(diagnostics),
+        diagnostics: diagnostics,
+      ),
+      httpClient: createCodeKitHttpClient(diagnostics: diagnostics),
       errorHooks: hooks,
       storageDescription: 'Drift (persistent)',
     );
@@ -76,8 +77,8 @@ final class QaServices {
     );
     return QaServices._(
       diagnostics: diagnostics,
-      dio: Dio().withDiagnostics(diagnostics),
-      httpClient: http.Client().withDiagnostics(diagnostics),
+      dio: createCodeKitDio(diagnostics: diagnostics),
+      httpClient: createCodeKitHttpClient(diagnostics: diagnostics),
       errorHooks: null,
       storageDescription: 'Memory (test)',
     );

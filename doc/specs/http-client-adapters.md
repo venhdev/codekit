@@ -2,7 +2,7 @@
 title: CodeKit HTTP Client Adapters
 status: active
 created: 2026-10-11
-updated: 2026-10-12
+updated: 2026-10-13
 ---
 
 # CodeKit HTTP Client Adapters
@@ -76,3 +76,43 @@ One completed record is submitted per method invocation when its inner Future co
 Capture exclusions apply before diagnostic processing. Cancellation/network failures retain the application error and produce a completed diagnostic error snapshot where possible. Snapshot models contain no live client types.
 
 The app chooses when to close the returned wrapper. `CodeKitHttpClient.close()` closes the wrapper and forwards close to its inner client exactly once; callers should use and close the returned wrapper instead of continuing to use the original client reference. Wrapping the same diagnostics instance again anywhere in a wrapper chain returns the current wrapper; a distinct diagnostics instance creates another layer. Closing diagnostics does not close a developer's HTTP client.
+
+## Dev proxy tooling and turnkey client factories
+
+Both `codekit_dio` and `codekit_http` support optional runtime HTTP proxying for developer traffic inspection tools (Proxyman, Charles, Mitmproxy).
+
+### Core domain model
+
+`DevProxyConfig` is an immutable, pure-Dart value object defined in `codekit_core`. It sanitizes raw host inputs (stripping schemes, paths, and extraneous ports), validates port boundaries (1–65535), and produces standard PAC directives (`PROXY host:port` or `DIRECT`).
+
+### SSL validation priority chain
+
+Transport options (`DevProxyDioOptions` and `DevProxyHttpOptions`) guard certificate evaluation with the following priority order:
+1. **Custom developer callback**: `badCertificateCallback` is invoked if supplied.
+2. **Built-in MITM bypass**: Returns `true` if `proxy.isEnabled && proxy.isValid`, `allowBadCertificates` is `true`, and `isDebug` is `true`.
+3. **Default secure reject**: Rejects invalid certificates.
+
+The `isDebug` gate defaults to `!bool.fromEnvironment('dart.vm.product')` (or `kDebugMode` in Flutter apps), but callers can inject any custom runtime or compile-time condition (such as `const bool.fromEnvironment('ENABLE_DEV_PROXY')`).
+
+### Turnkey client factories
+
+Callers can instantiate fully wired clients in a single call:
+
+```dart
+// Dio
+final dio = createCodeKitDio(
+  options: BaseOptions(baseUrl: 'https://api.example.com'),
+  diagnostics: diagnostics,
+  proxyProvider: () => devProxyState,
+  devProxyOptions: const DevProxyDioOptions.permissiveDebug(),
+  interceptors: [AuthInterceptor()],
+);
+
+// package:http
+final client = createCodeKitHttpClient(
+  diagnostics: diagnostics,
+  proxyProvider: () => devProxyState,
+  devProxyOptions: const DevProxyHttpOptions.permissiveDebug(),
+);
+```
+
