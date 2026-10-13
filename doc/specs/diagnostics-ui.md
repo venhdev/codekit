@@ -16,16 +16,16 @@ The initial interface helps a developer inspect records, find relevant HTTP requ
 
 ## Records view
 
-The records view is the primary CodeKit screen opened from the CodeKit bubble. In list-only mode its leading action is Back, which exits CodeKit; its app bar contains Filters (`tune` icon) and Settings (`settings` icon). A record search bar sits immediately below the app bar, followed by Search history (`history` icon) and Reload (`refresh` icon). Icon-only controls provide accessible labels/tooltips.
+The records view is the primary CodeKit screen opened from the CodeKit bubble. In list-only mode its leading action is Back, which exits CodeKit; its app bar contains Reload (`refresh` icon) and Settings (`settings` icon). A record search bar sits immediately below the app bar, followed by Search history (`history` icon) and Filters (`filter_list` icon). Icon-only controls provide accessible labels/tooltips.
 
 The view provides:
 
 - A text/regex search field over LOG message/source/error message and HTTP method/URI/source/error message. It does not search headers, bodies or context; body inspection retains its separate search.
-- A filter sheet opened from the app-bar Filters icon. The result count appears beneath the search bar; do not duplicate the filter control with a second Filters button in the results row.
+- A filter sheet opened from the search-row Filters icon. The result count appears beneath the search bar; when active filters exist, a horizontal scrollable row of active filter chips sits below the results row, allowing inspection and one-tap removal of active filter criteria.
 - While cursor pagination has more pages, the visible count is a lower bound (for example, `128+ results`); the UI does not run a separate full-count scan on every search.
 - Multi-select status chips for `1xx`, `2xx`, `3xx`, `4xx`, `5xx`, and `Unknown` (missing/out-of-range HTTP status and app logs); a from/to time range; duration categories (`fast`, `normal`, `warn`, `slow`, and no-duration); and record type (`app log` or `HTTP`).
 - The main list has two modes. **List-only** is the default: rows open details and do not show checkboxes or bulk actions. Long-pressing a row enters **Selection** mode and selects that row. Selection mode keeps search and filter controls in place, shows the total selected count (including IDs outside the current list), and marks selected rows with an outline instead of row checkboxes. Row taps toggle selection. The leading action becomes Close (`X`) and clears selection on exit. It has no Done or app-bar multi-select action.
-- Pull-to-refresh reloads the list in list-only mode. Reload has the same result and remains beside Search history for an explicit refresh.
+- Pull-to-refresh reloads the list in list-only mode. Reload in the app bar has the same result for an explicit refresh.
 - Selection mode has one full-width bottom action row: a tri-state checkbox, an expanding filled Share button with a share icon, and a delete icon with error-container colors. Share opens Confirm Export for all selected IDs. Delete confirms the selected count. Both are disabled when nothing is selected or an action is busy; searching or filtering alone does not export data.
 
 The checkbox reflects the loaded list only: checked when all its IDs are selected, indeterminate when some are selected, and unchecked when none are selected (including an empty list). Clicking an unchecked/indeterminate checkbox adds all loaded IDs; clicking a checked checkbox removes only loaded IDs. IDs outside the list remain selected. No hidden page scan runs for this control; loading another page recalculates its state. An empty-list checkbox is disabled.
@@ -61,7 +61,7 @@ Redacted is selected by default and file creation is unchecked. Export is unlimi
 
 ## Trace sessions
 
-The records status row keeps the results count at the left and Trace controls/session scope at the far right. The Trace chip opens the sessions sheet, its adjacent Start/Stop control toggles manual capture, and an active chip shows the count of accepted IDs in the current capture. In Selection mode, the count remains visible when active but controls are read-only. Active filters are indicated on the Filters app-bar icon. The Trace sessions bottom sheet is 55% of the viewport height and scrolls its contents. It lists saved sessions, offers a create action, and exposes manual Start/Stop capture controls. Tapping a session scopes the records view to its saved IDs; active search and filters are intersected with that scope while previously selected IDs remain selected. A session can be exported directly from the list or explicitly deleted through its actions menu after confirmation. Creating a picker-based session selects an inclusive time interval `[from, to]`, previews the currently queryable record count, and references all retained diagnostic record IDs in that interval.
+The records status row keeps the results count at the left and Trace controls/session scope at the far right. The Trace chip opens the sessions sheet, its adjacent Start/Stop control toggles manual capture, and an active chip shows the count of accepted IDs in the current capture. In Selection mode, the count remains visible when active but controls are read-only. Active filters are indicated on the Filters search-row icon. The Trace sessions bottom sheet is 55% of the viewport height and scrolls its contents. It lists saved sessions, offers a create action, and exposes manual Start/Stop capture controls. Tapping a session scopes the records view to its saved IDs; active search and filters are intersected with that scope while previously selected IDs remain selected. A session can be exported directly from the list or explicitly deleted through its actions menu after confirmation. Creating a picker-based session selects an inclusive time interval `[from, to]`, previews the currently queryable record count, and references all retained diagnostic record IDs in that interval.
 
 Picker-created and manually captured sessions appear in the same list. Manual Stop stores the accepted ID list without waiting for persistence; picker creation uses queryable records, as specified by the [Trace lifecycle](diagnostic-data-lifecycle.md#trace-sessions). Counts shown in the session list describe saved IDs, not a guarantee of currently available records. Manual capture remains active when the sheet closes; reopening shows Stop capture.
 
@@ -107,8 +107,8 @@ These ASCII wireframes illustrate the agreed layout and entry points. The behavi
                  tap
                   ▼
 ┌──────────────────────────────────┐
-│ [←] CodeKit                [tune][settings]│
-│ [Search records: text / regex ] [history][⟳]│
+│ [←] CodeKit               [⟳][settings]│
+│ [Search records: text / regex ] [history][filter]│
 └──────────────────────────────────┘
 ```
 
@@ -116,10 +116,12 @@ These ASCII wireframes illustrate the agreed layout and entry points. The behavi
 
 ```text
 ┌──────────────────────────────────┐
-│ [←] CodeKit                [tune][settings]│
-│ [Search records: text / regex ] [history][⟳]│
+│ [←] CodeKit               [⟳][settings]│
+│ [Search records: text / regex ] [history][filter]│
 ├──────────────────────────────────┤
 │ 128 results   [Trace off] [Start]│  List-only mode
+├──────────────────────────────────┤
+│ [ 2xx ⓧ ] [ Fast ⓧ ] [ HTTP ⓧ ]   │  Active filter chips (when active)
 ├──────────────────────────────────┤
 │ [HTTP] [500] [1820 ms] 10:42:18  │
 │ GET /users/42                    │
