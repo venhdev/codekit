@@ -1,6 +1,7 @@
 import 'package:codekit_core/codekit_core.dart';
 import 'package:flutter/material.dart';
 
+import '../proxy/codekit_proxy_card.dart';
 import '../shared/codekit_bottom_sheet.dart';
 import 'codekit_viewer_settings.dart';
 import 'codekit_viewer_theme.dart';
@@ -9,19 +10,30 @@ Future<void> showDiagnosticsSettingsSheet(
   BuildContext context, {
   required CodeKitDiagnostics diagnostics,
   required CodeKitViewerSettings settings,
+  DevProxyConfig? sessionProxyConfig,
+  ValueChanged<DevProxyConfig>? onProxyConfigChanged,
 }) => showCodeKitBottomSheet<void>(
   context,
-  body: _DiagnosticsSettingsSheet(diagnostics: diagnostics, settings: settings),
+  body: _DiagnosticsSettingsSheet(
+    diagnostics: diagnostics,
+    settings: settings,
+    sessionProxyConfig: sessionProxyConfig,
+    onProxyConfigChanged: onProxyConfigChanged,
+  ),
 );
 
 class _DiagnosticsSettingsSheet extends StatefulWidget {
   const _DiagnosticsSettingsSheet({
     required this.diagnostics,
     required this.settings,
+    this.sessionProxyConfig,
+    this.onProxyConfigChanged,
   });
 
   final CodeKitDiagnostics diagnostics;
   final CodeKitViewerSettings settings;
+  final DevProxyConfig? sessionProxyConfig;
+  final ValueChanged<DevProxyConfig>? onProxyConfigChanged;
 
   @override
   State<_DiagnosticsSettingsSheet> createState() =>
@@ -29,6 +41,14 @@ class _DiagnosticsSettingsSheet extends StatefulWidget {
 }
 
 class _DiagnosticsSettingsSheetState extends State<_DiagnosticsSettingsSheet> {
+  late DevProxyConfig _proxyConfig;
+
+  @override
+  void initState() {
+    super.initState();
+    _proxyConfig =
+        widget.sessionProxyConfig ?? widget.settings.currentDevProxyConfig;
+  }
   @override
   Widget build(BuildContext context) {
     final policy = widget.diagnostics.redactionPolicy;
@@ -75,6 +95,52 @@ class _DiagnosticsSettingsSheetState extends State<_DiagnosticsSettingsSheet> {
           Text(_recordModeLabel(widget.diagnostics.recordMode)),
         const Text('Applies to records accepted after this change.'),
         const SizedBox(height: 16),
+        if (widget.settings.hasDevProxySupport) ...[
+          Row(
+            children: [
+              Text('Dev proxy', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(width: 8),
+              Container(
+                key: const Key('codekit-proxy-session-badge'),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Session override',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSecondaryContainer,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Overrides proxy settings for this app session only. Resets when app restarts.',
+            key: const Key('codekit-proxy-session-note'),
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          CodeKitProxyCard(
+            config: _proxyConfig,
+            title: 'Dev Proxy (Session override)',
+            description:
+                'Applies to this session only. Does not persist across app restarts.',
+            onConfigChanged: (updated) {
+              setState(() => _proxyConfig = updated);
+              widget.onProxyConfigChanged?.call(updated);
+              widget.settings.onDevProxyConfigChanged?.call(updated);
+            },
+          ),
+          const SizedBox(height: 16),
+        ],
         if (widget.settings.setupDetails.isNotEmpty) ...[
           Text('Active setup', style: Theme.of(context).textTheme.titleMedium),
           for (final detail in widget.settings.setupDetails)

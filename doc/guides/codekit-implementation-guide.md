@@ -26,6 +26,7 @@ HTTP client capture & dev proxy (choose independently)
 
 Dev proxy controls (optional)
 [ ] Embeddable proxy card and preset dialog (Proxyman, Charles, Mitmproxy)
+[ ] In-viewer proxy session override (via CodeKitViewerSettings)
 
 Storage (choose one)
 [ ] In-memory (default)
@@ -57,7 +58,7 @@ Record mode (choose one)
 | `codekit_drift_diagnostic_store` | Records must persist across process restarts | Native SQLite for Android, iOS, and desktop; use memory on Web in this MVP |
 | `codekit_webhook` | Records should be sent to Discord and/or Telegram | Requires network access; credentials must not be embedded in a public client app |
 | `codekit_flutter` | Flutter framework and root-isolate errors should be recorded | Installs process-global handlers explicitly |
-| `codekit_ui` | The app needs the in-app records viewer, Trace controls, settings, export UI, or dev proxy cards | Flutter UI; does not create or own the diagnostics instance |
+| `codekit_ui` | The app needs the in-app records viewer, Trace controls, settings, export UI, or dev proxy cards/session overrides | Flutter UI; does not create or own the diagnostics instance |
 
 
 The app creates one `CodeKitDiagnostics` instance and passes that same instance
@@ -715,6 +716,7 @@ import 'package:flutter/material.dart';
 
 final diagnostics = CodeKitDiagnostics();
 final navigatorKey = GlobalKey<NavigatorState>();
+DevProxyConfig devProxyState = const DevProxyConfig();
 
 MaterialApp(
   navigatorKey: navigatorKey,
@@ -722,9 +724,11 @@ MaterialApp(
     diagnostics: diagnostics,
     navigatorKey: navigatorKey,
     debugOnly: true,
-    viewerSettings: const CodeKitViewerSettings(
+    viewerSettings: CodeKitViewerSettings(
       allowRuntimeRecordModeChanges: false,
-      setupDetails: [
+      devProxyProvider: () => devProxyState,
+      onDevProxyConfigChanged: (updated) => devProxyState = updated,
+      setupDetails: const [
         CodeKitViewerSetupDetail(
           label: 'HTTP capture',
           value: 'Dio',
@@ -757,6 +761,15 @@ querying, Trace management, or export.
 - `allowRuntimeRecordModeChanges`: defaults to false. If true, the settings
   sheet lets a user select Store raw or Redact before recording for new
   records. It does not rewrite existing records.
+- `initialThemeMode`: defaults to `ThemeMode.system`.
+- `enableDevProxyOverride`: defaults to true. Enables the dev proxy session
+  override section in the settings sheet. Set to false to hide it.
+- `devProxyConfig`: optional static or initial `DevProxyConfig` for this session.
+- `devProxyProvider`: optional dynamic provider callback returning the latest
+  `DevProxyConfig`. Takes precedence over `devProxyConfig` when supplied.
+- `onDevProxyConfigChanged`: callback invoked when dev proxy configuration is
+  modified or toggled within the viewer settings sheet, propagating session-scoped
+  overrides directly to the application's HTTP client `proxyProvider`.
 
 The active `RedactionPolicy` is shown read-only. The viewer does not edit
 redaction rules, URI exclusions, retention, database path, sinks, or adapter
@@ -793,6 +806,13 @@ working and not an access-control mechanism.
   of the host app theme. `CodeKitViewerSettings.initialThemeMode` selects the
   initial mode. A bubble retains the runtime choice while it exists; choices
   are not persisted across restart. Details and modal surfaces share the theme.
+- When dev proxy override is enabled (the default), Settings displays an interactive
+  Dev Proxy card labeled with a prominent `Session override` badge and caption:
+  "Overrides proxy settings for this app session only. Resets when app restarts."
+  Developers can toggle routing on/off and tap "Configure Host & Port" to enter
+  LAN IP, port, or select presets (9090, 8888, 8080). Modifications take effect
+  immediately for the active app session and survive closing/reopening the sheet
+  or bubble, but are discarded when the app restarts.
 - Export asks the user to choose Redacted or As stored. Copy and Share are
   separate full-width actions; Share can optionally share a temporary `.txt`
   file on native platforms or download it on Web. The sheets close by drag or
@@ -834,6 +854,8 @@ import 'package:flutter/material.dart';
 // In your developer dashboard or debug settings screen:
 CodeKitProxyCard(
   config: devProxyConfig,
+  title: 'Dev Proxy (Proxyman / Charles)',
+  description: 'Applies to this session only. Resets on restart.',
   onConfigChanged: (updatedConfig) {
     setState(() => devProxyConfig = updatedConfig);
     // Persist to preferences or secure storage if desired.
@@ -842,8 +864,10 @@ CodeKitProxyCard(
 ```
 
 - **Status display**: Card shows `ON: PROXY <host>:<port>` when active and valid, or `OFF: DIRECT (No proxy)`.
+- **Optional description**: An optional `description` string provides custom helper text or session-override guidance directly below the toggle switch.
 - **Toggle behavior**: A `SwitchListTile` toggles proxy routing on or off. Toggling on while the host is unconfigured automatically opens `CodeKitProxyDialog`.
 - **Preset chips dialog**: `CodeKitProxyDialog` (or `showCodeKitProxyDialog`) provides LAN host input, port input, and port presets: `9090 (Proxyman)`, `8888 (Charles)`, and `8080 (Mitmproxy)`. Tapping a preset chip updates the port field immediately. It validates that the host is non-empty and the port is within `1–65535`.
+- **Dual-use integration**: `CodeKitProxyCard` can be embedded into custom app developer screens or used out-of-the-box inside the viewer Settings sheet.
 
 ## 11. Query, Trace, delete, and export without the viewer
 
@@ -1221,6 +1245,10 @@ never real service credentials.
   toggling on with an unconfigured host.
 - Verify `CodeKitProxyDialog` updates port via preset chips (9090, 8888, 8080),
   validates non-empty host and valid port (1–65535), and invokes `onSave`.
+- Verify the viewer Settings sheet displays the Dev Proxy section with the
+  `Session override` badge and explanatory caption, allows in-place toggle and
+  configuration, updates `onDevProxyConfigChanged`, retains session state across
+  reopening within the running process, and hides cleanly when `enableDevProxyOverride: false`.
 
 ## 15. Ready-to-use coding-agent prompt
 
@@ -1254,6 +1282,7 @@ Dev proxy tooling (choose independently)
 - [ ] Dio dev proxy routing
 - [ ] package:http dev proxy routing
 - [ ] Embeddable proxy card & dialog (Flutter UI)
+- [ ] In-viewer proxy session override (CodeKitViewerSettings)
 
 Record mode (choose one)
 - [ ] Redact before recording
@@ -1284,7 +1313,9 @@ Implementation rules:
 - If dev proxy tooling is selected, provide `proxyProvider`, guard
   `allowBadCertificates` (`false` by default) with an explicit `isDebug` check,
   and optionally use turnkey factories (`createCodeKitDio` or
-  `createCodeKitHttpClient`). Embed `CodeKitProxyCard` in dev/QA screens.
+  `createCodeKitHttpClient`). Embed `CodeKitProxyCard` in dev/QA screens or
+  wire `devProxyProvider` / `onDevProxyConfigChanged` in `CodeKitViewerSettings`
+  for in-viewer session overrides.
 - If Drift is selected, use a host-chosen native database path; Web uses
   memory in this MVP. Do not claim dispose flushes pending writes.
 - If a webhook is selected, set explicit dispatch policies, keep credentials

@@ -3,7 +3,7 @@ title: CodeKit System Architecture
 description: Authoritative package topology, dependency direction, and source layout for the CodeKit diagnostics ecosystem.
 status: active
 created: 2026-10-10
-updated: 2026-10-13
+updated: 2026-10-14
 ---
 
 # CodeKit System Architecture
@@ -60,7 +60,7 @@ The [public API](public-api.md) owns entrypoint names, setup composition, receip
 | --- | --- | --- |
 | `codekit_core` | Shared models (including DevProxyConfig), recorder, memory store, retention, redaction, sessions, query/export and sink contracts | General-purpose Dart; no Flutter or concrete storage dependency. |
 | `codekit` | Umbrella, convenient configuration and selected Dart defaults | Core and explicitly selected platform-compatible defaults. |
-| `codekit_ui` | Bubble, viewer, HTTP/JSON details, dev proxy controls, and platform share/download | Core and Flutter; no error-hook ownership. |
+| `codekit_ui` | Bubble, viewer, HTTP/JSON details, dev proxy controls & in-viewer session override, and platform share/download | Core and Flutter; no error-hook ownership. |
 | `codekit_flutter` | Optional Flutter framework and root-isolate error hooks | Core and Flutter; no viewer or share dependency. |
 | `codekit_dio` | Dio capture, interceptor, withDiagnostics extension, dev proxy adapter, and turnkey factory | Core and Dio. |
 | `codekit_http` | package:http capture, BaseClient wrapper, withDiagnostics extension, dev proxy client, and turnkey factory | Core and package:http; independent of webhook delivery. |

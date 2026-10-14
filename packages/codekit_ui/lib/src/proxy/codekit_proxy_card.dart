@@ -8,6 +8,7 @@ class CodeKitProxyCard extends StatelessWidget {
   final DevProxyConfig config;
   final ValueChanged<DevProxyConfig> onConfigChanged;
   final String title;
+  final String? description;
   final EdgeInsetsGeometry padding;
 
   const CodeKitProxyCard({
@@ -15,6 +16,7 @@ class CodeKitProxyCard extends StatelessWidget {
     required this.config,
     required this.onConfigChanged,
     this.title = 'Dev Proxy (Proxyman / Charles)',
+    this.description,
     this.padding = const EdgeInsets.all(16),
   });
 
@@ -80,6 +82,17 @@ class CodeKitProxyCard extends StatelessWidget {
                 }
               },
             ),
+            if (description != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                description!,
+                key: const Key('codekit-proxy-description'),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,

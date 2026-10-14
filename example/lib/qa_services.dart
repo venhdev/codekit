@@ -26,6 +26,7 @@ final class QaServices {
   final http.Client httpClient;
   final CodeKitFlutterErrorHooks? errorHooks;
   final String storageDescription;
+  kit.DevProxyConfig devProxyConfig = const kit.DevProxyConfig();
   bool _closed = false;
 
   static final kit.RedactionPolicy _redactionPolicy = kit.RedactionPolicy(
@@ -54,17 +55,26 @@ final class QaServices {
           debugPrint('[CodeKit store warning] $message $error\n$stackTrace'),
     );
     final hooks = CodeKitFlutterErrorHooks.install(diagnostics);
-    return QaServices._(
-      diagnostics: diagnostics,
-      dio: createCodeKitDio(
-        options: BaseOptions(
-          connectTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 10),
-          sendTimeout: const Duration(seconds: 10),
-        ),
-        diagnostics: diagnostics,
+    late final QaServices services;
+    final dio = createCodeKitDio(
+      options: BaseOptions(
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+        sendTimeout: const Duration(seconds: 10),
       ),
-      httpClient: createCodeKitHttpClient(diagnostics: diagnostics),
+      diagnostics: diagnostics,
+      proxyProvider: () => services.devProxyConfig,
+      devProxyOptions: const DevProxyDioOptions.permissiveDebug(),
+    );
+    final httpClient = createCodeKitHttpClient(
+      diagnostics: diagnostics,
+      proxyProvider: () => services.devProxyConfig,
+      devProxyOptions: const DevProxyHttpOptions.permissiveDebug(),
+    );
+    return services = QaServices._(
+      diagnostics: diagnostics,
+      dio: dio,
+      httpClient: httpClient,
       errorHooks: hooks,
       storageDescription: 'Drift (persistent)',
     );
@@ -75,10 +85,21 @@ final class QaServices {
     final diagnostics = kit.CodeKitDiagnostics(
       redactionPolicy: _redactionPolicy,
     );
-    return QaServices._(
+    late final QaServices services;
+    final dio = createCodeKitDio(
       diagnostics: diagnostics,
-      dio: createCodeKitDio(diagnostics: diagnostics),
-      httpClient: createCodeKitHttpClient(diagnostics: diagnostics),
+      proxyProvider: () => services.devProxyConfig,
+      devProxyOptions: const DevProxyDioOptions.permissiveDebug(),
+    );
+    final httpClient = createCodeKitHttpClient(
+      diagnostics: diagnostics,
+      proxyProvider: () => services.devProxyConfig,
+      devProxyOptions: const DevProxyHttpOptions.permissiveDebug(),
+    );
+    return services = QaServices._(
+      diagnostics: diagnostics,
+      dio: dio,
+      httpClient: httpClient,
       errorHooks: null,
       storageDescription: 'Memory (test)',
     );

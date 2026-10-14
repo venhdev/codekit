@@ -9,3 +9,7 @@ skills-lock.json
 # Dart workspace artifacts
 .dart_tool/
 build/
+
+# Local environment configuration
+*.env
+.env

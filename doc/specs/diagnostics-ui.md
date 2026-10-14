@@ -3,7 +3,7 @@ title: CodeKit Diagnostics UI
 description: First UI contract for inspecting diagnostic records, managing Trace sessions, exporting records, and reusing recent searches.
 status: active
 created: 2026-10-10
-updated: 2026-10-13
+updated: 2026-10-14
 ---
 
 # CodeKit Diagnostics UI
@@ -86,6 +86,12 @@ The optional `CodeKitViewerSettings` configuration lets a host expose factual, r
 Theme offers System, Light and Dark in one segmented control. `initialThemeMode` defaults to System, which follows platform brightness even if the host app forces a different theme. The choice applies to the viewer, record details and modal surfaces; it does not change the host app. A bubble retains the choice across viewer reopening for its lifetime; a directly mounted screen retains it for that screen's lifetime. Choices are not persisted across process restart. Status/duration chips and selection outlines remain readable in both light and dark themes.
 
 Changing record mode at runtime is opt-in through `allowRuntimeRecordModeChanges`; if enabled, the sheet offers Store raw and Redact before recording. The choice applies only to subsequently accepted records. Redaction rules, endpoint exclusions, retention, storage and adapter attachment remain host configuration and are not editable from the viewer.
+
+### Dev proxy session override in Settings
+
+The Settings sheet includes an interactive dev proxy card enabled by default (`enableDevProxyOverride: true`), labeled with a prominent `Session override` badge and caption: *"Overrides proxy settings for this app session only. Resets when app restarts."* Users can toggle proxying on/off and open the configuration dialog to edit host/port or choose presets (`9090 (Proxyman)`, `8888 (Charles)`, `8080 (Mitmproxy)`).
+
+Runtime changes take effect immediately for the active app session and are preserved across viewer reopening, but are not persisted across app restarts. Host applications can supply `devProxyProvider` and `onDevProxyConfigChanged` in `CodeKitViewerSettings` to link the session override directly to their HTTP clients' `proxyProvider`. Setting `enableDevProxyOverride: false` hides the card.
 
 ## Record deletion
 
@@ -303,6 +309,7 @@ The `1xx` and `Unknown` chips use neutral colors. The CodeKit bubble is placed i
 `CodeKitProxyCard` presents:
 - Title (default: `Dev Proxy (Proxyman / Charles)`).
 - Subtitle displaying current status: `ON: PROXY <host>:<port>` when active and valid, or `OFF: DIRECT (No proxy)`.
+- Optional `description` for helper or session context (e.g., `'Applies to this session only. Does not persist across app restarts.'`).
 - A toggle switch (`SwitchListTile`). Toggling the switch when the host is unconfigured automatically opens the configuration dialog.
 - An action button (`Configure Host & Port`) opening `CodeKitProxyDialog`.
 - `onConfigChanged` callback passing updated `DevProxyConfig` to the caller.

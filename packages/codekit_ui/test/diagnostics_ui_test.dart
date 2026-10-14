@@ -520,6 +520,115 @@ void main() {
     await diagnostics.dispose();
   });
 
+  testWidgets(
+    'settings exposes editable dev proxy session override and retains across reopening',
+    (tester) async {
+      final diagnostics = CodeKitDiagnostics();
+      DevProxyConfig? reportedConfig;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CodeKitDiagnosticsScreen(
+            diagnostics: diagnostics,
+            viewerSettings: CodeKitViewerSettings(
+              devProxyConfig: const DevProxyConfig(
+                isEnabled: false,
+                host: '',
+                port: 9090,
+              ),
+              onDevProxyConfigChanged: (config) => reportedConfig = config,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dev proxy'), findsOneWidget);
+      expect(
+        find.byKey(const Key('codekit-proxy-session-badge')),
+        findsOneWidget,
+      );
+      expect(find.text('Session override'), findsOneWidget);
+      expect(
+        find.text(
+          'Overrides proxy settings for this app session only. Resets when app restarts.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('OFF: DIRECT (No proxy)'), findsOneWidget);
+
+      await tester.ensureVisible(
+        find.byKey(const Key('codekit-proxy-edit-btn')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('codekit-proxy-edit-btn')));
+      await tester.pumpAndSettle();
+      expect(find.text('Configure Dev Proxy'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const Key('codekit-proxy-host-input')),
+        '192.168.1.100',
+      );
+      await tester.tap(find.byKey(const Key('codekit-preset-9090')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('codekit-proxy-save-btn')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ON: PROXY 192.168.1.100:9090'), findsOneWidget);
+      expect(reportedConfig?.isEnabled, isTrue);
+      expect(reportedConfig?.sanitizedHost, '192.168.1.100');
+      expect(reportedConfig?.port, 9090);
+
+      await tester.ensureVisible(
+        find.byKey(const Key('codekit-proxy-toggle')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('codekit-proxy-toggle')));
+      await tester.pumpAndSettle();
+      expect(find.text('OFF: DIRECT (No proxy)'), findsOneWidget);
+      expect(reportedConfig?.isEnabled, isFalse);
+
+      await tester.tapAt(const Offset(20, 20));
+      await tester.pumpAndSettle();
+      expect(find.text('CodeKit settings'), findsNothing);
+
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('OFF: DIRECT (No proxy)'), findsOneWidget);
+
+      await diagnostics.dispose();
+    },
+  );
+
+  testWidgets(
+    'settings hides dev proxy section when enableDevProxyOverride is false',
+    (tester) async {
+      final diagnostics = CodeKitDiagnostics();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CodeKitDiagnosticsScreen(
+            diagnostics: diagnostics,
+            viewerSettings: const CodeKitViewerSettings(
+              enableDevProxyOverride: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dev proxy'), findsNothing);
+      expect(
+        find.byKey(const Key('codekit-proxy-session-badge')),
+        findsNothing,
+      );
+
+      await diagnostics.dispose();
+    },
+  );
+
   testWidgets('manual Trace capture survives closing and reopening the sheet', (
     tester,
   ) async {

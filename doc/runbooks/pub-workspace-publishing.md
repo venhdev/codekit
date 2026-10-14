@@ -3,7 +3,7 @@ title: Publish Packages from a Pub Workspace
 description: Release CodeKit workspace members individually through the standard Dart Pub workflow.
 status: active
 created: 2026-10-10
-updated: 2026-10-10
+updated: 2026-10-14
 ---
 
 # Publish Packages from a Pub Workspace
@@ -18,10 +18,11 @@ GitHub Actions verifies only workspace packages with changed files. Changes to
 the root workspace manifest or lockfile, SDK pin, shared analysis options, or
 CI workflows trigger verification for all packages. Verification runs format,
 analysis, and tests from each selected package directory after resolving the
-shared workspace from the root. `example` remains a workspace member but is not
+shared workspace from the root: pure-Dart packages run `dart analyze --fatal-infos`
+and `dart test`, while Flutter packages (`codekit_flutter` and `codekit_ui`)
+run `flutter analyze --fatal-infos` and `flutter test` (plus `flutter test test_native`
+for `codekit_ui`). `example` remains a workspace member but is not
 a CI target: its source is not built, analyzed, tested, or published.
-Flutter package verification also runs its native-specific test suite when
-present.
 
 Release tags identify one package and its manifest version using
 `<package-name>-v<version>`, for example `codekit_core-v0.1.1`. The publish
@@ -35,7 +36,7 @@ packages together, create tags and publish in dependency order.
 - Version selection and manifest/changelog updates have passed the `/ci-pub` approval gate.
 - The workspace root is private (`publish_to: none`); each publishable member has its own valid `pubspec.yaml`.
 - Members remain `publish_to: none` during development. Remove that guard only from packages explicitly approved for a release, then repeat the dry-run and clean-tree checks before upload.
-- Every workspace member's Dart SDK constraint is at least `^3.6.0`, and internal dependency constraints accept the versions declared by local workspace members.
+- Every workspace member's Dart SDK constraint matches the workspace toolchain (`>=3.13.0 <4.0.0`), and internal dependency constraints accept the versions declared by local workspace members.
 - The release changes are committed and the Git working tree is clean before publication.
 
 ## Compatibility and order
@@ -58,7 +59,7 @@ any order once their dependencies are available.
 
 1. **Complete release preflight.** Run `/ci-pub` for the release scope. Stop if tests, formatting, changelog review, or version approval fails. Do not upload packages until all planned development is complete.
 2. **Confirm workspace membership.** Run `fvm dart pub workspace list` from the repository and check that every package intended for release appears in the list.
-3. **Dry-run every package.** For each package in the release scope, run `fvm dart pub -C packages/<package> publish --dry-run`. Review the included file list and resolve every warning or error before continuing.
+3. **Dry-run every package.** Ensure the Git working tree is completely clean before running validation. For each package in the release scope, run `fvm dart pub -C packages/<package> publish --dry-run`. Review the included file list and resolve every warning or error before continuing.
 4. **Order packages by dependency.** Publish depended-on packages before packages that depend on them. Confirm that each internal version constraint accepts the dependency's release version.
 5. **Publish each package individually.** Create and push `<package>-v<version>` for each approved package, following the dependency order. The GitHub Actions publish workflow validates the tagged package, runs `publish --dry-run`, then publishes from `packages/<package>` through pub.dev OIDC. Pub publishes the package in the selected directory; the workspace is not one atomic release.
 6. **Handle propagation delays safely.** If a newly published dependency is not yet available during validation of a dependent package, wait and retry. Do not use `--skip-validation` in the normal release path because it bypasses client-side checks and dependency resolution.

@@ -33,6 +33,8 @@ class _CodeKitBubbleState extends State<CodeKitBubble> {
   late final ValueNotifier<ThemeMode> _theme = ValueNotifier(
     widget.viewerSettings.initialThemeMode,
   );
+  late DevProxyConfig _sessionProxy =
+      widget.viewerSettings.currentDevProxyConfig;
   Offset _inset = const Offset(16, 24);
   bool _open = false;
 
@@ -55,7 +57,13 @@ class _CodeKitBubbleState extends State<CodeKitBubble> {
             child: CodeKitDiagnosticsScreen(
               diagnostics: widget.diagnostics,
               searchHistory: _history,
-              viewerSettings: widget.viewerSettings,
+              viewerSettings: widget.viewerSettings.copyWith(
+                devProxyProvider: () => _sessionProxy,
+                onDevProxyConfigChanged: (updated) {
+                  _sessionProxy = updated;
+                  widget.viewerSettings.onDevProxyConfigChanged?.call(updated);
+                },
+              ),
             ),
           ),
         ),

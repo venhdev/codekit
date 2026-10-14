@@ -75,10 +75,12 @@ class _DiagnosticsRecordsScreenState extends State<_DiagnosticsRecordsScreen> {
   bool _selectionMode = false;
   TraceSession? _traceSession;
   Timer? _traceCountTimer;
+  late DevProxyConfig _sessionProxyConfig;
 
   @override
   void initState() {
     super.initState();
+    _sessionProxyConfig = widget.viewerSettings.currentDevProxyConfig;
     _history = widget.searchHistory ?? SearchHistoryStore();
     _controller = RecordsController(widget.diagnostics, _history);
     _controller.addListener(_refresh);
@@ -281,6 +283,10 @@ class _DiagnosticsRecordsScreenState extends State<_DiagnosticsRecordsScreen> {
             context,
             diagnostics: widget.diagnostics,
             settings: widget.viewerSettings,
+            sessionProxyConfig: _sessionProxyConfig,
+            onProxyConfigChanged: (updated) {
+              setState(() => _sessionProxyConfig = updated);
+            },
           ),
         ),
       ],

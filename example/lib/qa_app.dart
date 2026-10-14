@@ -26,6 +26,10 @@ final class _QaAppState extends State<QaApp> {
     actions = QaActions(widget.services);
     viewerSettings = CodeKitViewerSettings(
       allowRuntimeRecordModeChanges: true,
+      devProxyProvider: () => widget.services.devProxyConfig,
+      onDevProxyConfigChanged: (updated) {
+        widget.services.devProxyConfig = updated;
+      },
       setupDetails: [
         CodeKitViewerSetupDetail(
           label: 'Storage',

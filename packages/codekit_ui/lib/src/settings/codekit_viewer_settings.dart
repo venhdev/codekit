@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart' show ThemeMode;
+import 'package:codekit_core/codekit_core.dart';
+import 'package:flutter/material.dart' show ThemeMode, ValueChanged;
 
 /// Optional host-provided configuration for the diagnostics viewer.
 class CodeKitViewerSettings {
@@ -6,6 +7,10 @@ class CodeKitViewerSettings {
     this.allowRuntimeRecordModeChanges = false,
     this.setupDetails = const [],
     this.initialThemeMode = ThemeMode.system,
+    this.enableDevProxyOverride = true,
+    this.devProxyConfig,
+    this.devProxyProvider,
+    this.onDevProxyConfigChanged,
   });
 
   /// Enables choosing the record mode for records accepted after the change.
@@ -16,6 +21,48 @@ class CodeKitViewerSettings {
 
   /// Initial viewer theme; runtime choices live for the viewer/bubble session.
   final ThemeMode initialThemeMode;
+
+  /// Whether the dev proxy session override card is enabled in viewer settings.
+  /// Defaults to `true`.
+  final bool enableDevProxyOverride;
+
+  /// Initial or static dev proxy configuration for this session.
+  final DevProxyConfig? devProxyConfig;
+
+  /// Optional dynamic provider callback resolving the current dev proxy configuration.
+  final DevProxyConfig Function()? devProxyProvider;
+
+  /// Callback invoked when dev proxy configuration is modified (toggled or edited)
+  /// in the viewer settings.
+  final ValueChanged<DevProxyConfig>? onDevProxyConfigChanged;
+
+  /// Whether dev proxy section is shown in viewer settings.
+  bool get hasDevProxySupport => enableDevProxyOverride;
+
+  /// Current resolved dev proxy configuration.
+  DevProxyConfig get currentDevProxyConfig =>
+      devProxyProvider?.call() ?? devProxyConfig ?? const DevProxyConfig();
+
+  CodeKitViewerSettings copyWith({
+    bool? allowRuntimeRecordModeChanges,
+    List<CodeKitViewerSetupDetail>? setupDetails,
+    ThemeMode? initialThemeMode,
+    bool? enableDevProxyOverride,
+    DevProxyConfig? devProxyConfig,
+    DevProxyConfig Function()? devProxyProvider,
+    ValueChanged<DevProxyConfig>? onDevProxyConfigChanged,
+  }) => CodeKitViewerSettings(
+    allowRuntimeRecordModeChanges:
+        allowRuntimeRecordModeChanges ?? this.allowRuntimeRecordModeChanges,
+    setupDetails: setupDetails ?? this.setupDetails,
+    initialThemeMode: initialThemeMode ?? this.initialThemeMode,
+    enableDevProxyOverride:
+        enableDevProxyOverride ?? this.enableDevProxyOverride,
+    devProxyConfig: devProxyConfig ?? this.devProxyConfig,
+    devProxyProvider: devProxyProvider ?? this.devProxyProvider,
+    onDevProxyConfigChanged:
+        onDevProxyConfigChanged ?? this.onDevProxyConfigChanged,
+  );
 }
 
 class CodeKitViewerSetupDetail {
