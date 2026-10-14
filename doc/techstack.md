@@ -1,3 +1,11 @@
+---
+title: CodeKit Dependency Versions
+description: Selected and proposed direct dependency versions for the CodeKit workspace.
+status: active
+created: 2026-10-10
+updated: 2026-10-14
+---
+
 # CodeKit Dependency Versions
 
 ## Development toolchain

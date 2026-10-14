@@ -1,12 +1,15 @@
 ---
 title: Dependency Compatibility and Engineering Scout
-description: Evidence for dependency versions and selective reuse of Memozen engineering practices.
-status: draft
+description: Historical research evidence for dependency versions and selective reuse of Memozen engineering practices (non-normative).
+status: archived
 created: 2026-10-11
-updated: 2026-10-11
+updated: 2026-10-14
 ---
 
 # Dependency Compatibility and Engineering Scout
+
+> [!NOTE] Historical Research Reference (Non-Normative)
+> This document preserves the initial exploration and compatibility findings conducted on 2026-10-11. Normative contracts, system boundaries, and engineering practices are owned authoritatively by [System Architecture](../specs/system-architecture.md), [Version Registry](../techstack.md), and [Engineering Standards](../standards/engineering-standards.md).
 
 ## Scope and recommendation
 

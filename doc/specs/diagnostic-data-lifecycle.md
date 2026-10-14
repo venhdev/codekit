@@ -3,7 +3,7 @@ title: CodeKit Diagnostic Data Lifecycle
 description: Event recording, retention, Trace session, export, and sink behavior for CodeKit.
 status: active
 created: 2026-10-10
-updated: 2026-10-12
+updated: 2026-10-14
 ---
 
 # CodeKit Diagnostic Data Lifecycle
@@ -125,7 +125,7 @@ Export does not mutate stored records or saved reports. The same disclosure choi
 
 The default record mode is Store raw; users choose Redacted or As stored at export. Core exports readable indented record JSON text and exposes body/header/cURL formatters; clipboard/share are UI responsibilities. The initial UI contract adds no record-count or byte-size limit for selected or matching records.
 
-HTTP adapters create one completed HTTP record when the request lifecycle reaches the adapter's declared completion boundary. The record carries a local correlation ID, `requestStartedAt`, measured duration, and `recordedAt` assigned when the recorder accepts it. The adapter allocates one ID before sending the request and retains it in internal request metadata; the completed record uses that same ID. Allocating an ID does not accept a record or add it to Trace capture. The correlation ID is internal metadata and is not added to the network request as a header. Dio streamed responses and package:http send() complete at response headers, mark body unsupported and measure duration to headers. The package:http wrapper's buffered convenience methods complete when the corresponding inner method returns its Response or throws; read()/readBytes() complete when their inner method returns or throws. It never subscribes to or wraps the application stream. send() therefore creates a record even if the body is never consumed, and subsequent stream errors/cancellation do not change the record. Duration stops at inner completion before response snapshot processing; Trace membership follows recorder acceptance after snapshot preparation. The [HTTP adapters contract](http-client-adapters.md#packagehttp) owns unlimited buffered body capture, content types, partial metadata and fallback states. Normal Dio HTTP completes when its response or error snapshot is available. HTTP body capture is toggleable. Media/file bytes are not captured; a separate option selects metadata-only capture or inclusion of the raw local path.
+HTTP adapters create and submit one completed HTTP record when the request lifecycle reaches the adapter's declared completion boundary. Specific client completion boundaries, streaming vs buffered body capture, and client snapshot behaviors are governed authoritatively by [HTTP Client Adapters](http-client-adapters.md).
 
 cURL is generated on demand from the structured HTTP data after the requested disclosure transformation, rather than stored as an independent canonical payload. As stored cURL reflects available stored fields; it cannot recover redacted values or uncaptured body/file bytes. Incomplete representations are identified as insufficient for replay. Generating or copying cURL does not send a request.
 

@@ -1,8 +1,17 @@
+---
+title: Documentation Index & Placement Matrix
+description: Authoritative SSOT placement matrix and governance boundaries for CodeKit documentation.
+status: active
+created: 2026-10-10
+updated: 2026-10-14
+---
+
 # Documentation Index & Placement Matrix
 
 | Topic / Scope | Authoritative SSOT | Responsibility |
 | :--- | :--- | :--- |
 | **Tasks & Execution** | Defined in [`.agents/task-tracker.md`](../.agents/task-tracker.md) | Decomposed task units and progress tracking |
+| **QA & Verification Records** | Defined in [`.agents/qa-verification-notes.md`](../.agents/qa-verification-notes.md) | Transient test run outcomes and device QA records |
 | **Testing Governance** | Defined in [`.agents/harness-anchor.md`](../.agents/harness-anchor.md) | Test harness infrastructure and invariant testing |
 | **CodeKit Roadmap** | [`roadmap.md`](roadmap.md) | Product direction, milestones, and roadmap status |
 | **Dependency Versions** | [`techstack.md`](techstack.md) | Selected and proposed direct dependency versions; version tables only |

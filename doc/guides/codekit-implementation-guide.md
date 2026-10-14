@@ -1,11 +1,16 @@
+---
+title: CodeKit Application Implementation Guide
+description: Practical integration recipes, package composition, dev proxy setup, and turnkey coding-agent prompts for CodeKit.
+status: active
+created: 2026-10-11
+updated: 2026-10-14
+---
+
 # CodeKit Application Implementation Guide
 
-This is the standalone, end-to-end integration guide for CodeKit. It contains
-the package choices, application composition rules, code examples, data and
-resource lifecycles, privacy behavior, supported capture boundaries, viewer
-behavior, and verification checklist an implementation agent needs. Do not
-assume another CodeKit document is required to understand or implement the
-integration.
+This is the end-to-end application integration guide and practical recipe catalog for CodeKit. It provides package selection checklists, setup sequences, code recipes, dev proxy workflows, and a copyable coding-agent prompt.
+
+Per the [documentation index](../README.md), the specifications under `doc/specs/` remain the authoritative Single Source of Truth (SSOT) for normative contracts, schemas, and lifecycles. This guide demonstrates how to compose them in real-world applications.
 
 The guide describes the current CodeKit workspace package APIs. The current
 workspace versions are unpublished. Before editing an application, an agent
@@ -150,6 +155,8 @@ diagnostic metadata; adapters do not add them to network request headers.
 
 ## 4. Initialize the core
 
+*(Canonical entrypoint and constructor contracts are defined in [Public API](../specs/public-api.md).)*
+
 The core-only setup works in Dart and Flutter. The default store is
 `MemoryDiagnosticStore`, the default record mode is `RecordMode.storeRaw`, and
 the default redaction policy enables the Authorization, Cookie, and Set-Cookie
@@ -270,6 +277,8 @@ write and eventually fill the queue.
 
 ## 5. Configure privacy and redaction
 
+*(Canonical redaction policy, rule models, and transformation lifecycles are defined in [Diagnostic Data Lifecycle](../specs/diagnostic-data-lifecycle.md#redaction-policy).)*
+
 Record mode, storage backend, and export representation are separate decisions:
 
 | Choice | Effect |
@@ -335,6 +344,8 @@ partial output or falling back to As stored.
 
 ## 6. Choose storage
 
+*(Canonical retention algorithms and storage adapter boundaries are defined in [Diagnostic Data Lifecycle](../specs/diagnostic-data-lifecycle.md#retention-and-eviction) and [System Architecture](../specs/system-architecture.md#ready-to-use-storage-packages).)*
+
 ### In-memory storage
 
 No extra adapter is needed. This is the default and works on Dart, Flutter
@@ -387,6 +398,8 @@ diagnostics instance. Database path and retention are host configuration; the
 viewer does not edit them.
 
 ## 7. Add diagnostic sinks
+
+*(Canonical dispatch policies, delivery guarantees, and sink interfaces are defined in [Diagnostic Sinks](../specs/diagnostic-sinks.md).)*
 
 Sinks receive a redacted dispatch copy prepared with the policy captured for
 that dispatch, even when the store's record mode is Store raw. Sink dispatch is
@@ -487,6 +500,8 @@ record sections are included. Do not use sink content filtering as a substitute
 for redacting data before persistence.
 
 ## 8. Capture HTTP clients
+
+*(Canonical adapter behaviors, DevProxyConfig validation, and the SSL bypass priority chain are defined in [HTTP Client Adapters](../specs/http-client-adapters.md).)*
 
 Attach capture to the client's actual configured instance. CodeKit must not
 create a parallel client, read ahead or drain a response, add a request header,
@@ -703,6 +718,8 @@ automatically and does not depend on the viewer.
 
 ## 10. Add the Flutter viewer
 
+*(Canonical UI screens, navigation flows, filter chips, and export sheets are defined in [Diagnostics UI](../specs/diagnostics-ui.md).)*
+
 ### Floating bubble
 
 The bubble belongs in `MaterialApp.builder` and must use the same navigator key
@@ -871,6 +888,7 @@ CodeKitProxyCard(
 
 ## 11. Query, Trace, delete, and export without the viewer
 
+*(Canonical Trace session management, ID resolution, and export disclosure rules are defined in [Diagnostic Data Lifecycle](../specs/diagnostic-data-lifecycle.md#trace-sessions) and [Public API](../specs/public-api.md).)*
 
 The app can use core APIs directly or build a custom UI.
 
