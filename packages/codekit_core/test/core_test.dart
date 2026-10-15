@@ -24,6 +24,127 @@ HttpInput request(
 );
 void main() {
   test(
+    'base64 image preset masks body values, preserving other fields',
+    () async {
+      const image = 'iVBORw0KGgo=';
+      final d = CodeKitDiagnostics(
+        recordMode: RecordMode.redactBeforeRecording,
+      );
+      addTearDown(d.dispose);
+      final receipt = d.log(
+        HttpInput(
+          recordId: 'image',
+          requestStartedAt: DateTime.utc(2026),
+          method: 'POST',
+          uri: Uri.parse('https://example.com/?image=$image'),
+          context: const {'image': image},
+          requestHeaders: const {
+            'image': [image],
+          },
+          requestBody: const BodySnapshot.json({
+            'items': [
+              {'image': image, 'keep': 'test'},
+            ],
+            image: 42,
+          }),
+          response: HttpResponseSnapshot(
+            body: BodySnapshot.text(' {"image":"$image"} '),
+          ),
+        ),
+      );
+      expect(receipt.accepted, isTrue);
+      final record = (await d.getById('image'))!;
+      final payload = record.payload as HttpPayload;
+      expect(payload.requestBody!.data, {
+        'items': [
+          {'image': redactionMarker, 'keep': 'test'},
+        ],
+        image: 42,
+      });
+      expect(payload.requestBody!.representation, BodyRepresentation.json);
+      expect(jsonDecode(payload.response!.body!.data as String), {
+        'image': redactionMarker,
+      });
+      expect(record.context!['image'], image);
+      expect(payload.requestHeaders!['image'], [image]);
+      expect(payload.uri.queryParameters['image'], image);
+      expect(d.redactionPolicy.apply(record).toJson(), record.toJson());
+      for (final text in [
+        image,
+        'data:image/png;base64,$image',
+        jsonEncode(image),
+      ]) {
+        final id = d.createRecordId();
+        d.log(request(id, body: BodySnapshot.text(text)));
+        final body =
+            ((await d.getById(id))!.payload as HttpPayload).requestBody!;
+        expect(body.representation, BodyRepresentation.text);
+        expect(
+          body.data,
+          text.startsWith('"') ? jsonEncode(redactionMarker) : redactionMarker,
+        );
+      }
+      for (final text in [
+        '  {"keep": "test"}  ',
+        'ordinary text',
+        'iVBORw0KGgo=!',
+      ]) {
+        final id = d.createRecordId();
+        d.log(request(id, body: BodySnapshot.text(text)));
+        expect(
+          ((await d.getById(id))!.payload as HttpPayload).requestBody!.data,
+          text,
+        );
+      }
+    },
+  );
+  test(
+    'base64 preset honors raw storage, export, dispatch and opt-out',
+    () async {
+      const image = 'iVBORw0KGgo=';
+      final sink = CollectingSink(httpDispatchPolicy: HttpDispatchPolicy());
+      final d = CodeKitDiagnostics(sinks: [sink]);
+      addTearDown(d.dispose);
+      d.log(request('raw-image', body: const BodySnapshot.text(image)));
+      await Future<void>.value();
+      expect(
+        ((await d.getById('raw-image'))!.payload as HttpPayload)
+            .requestBody!
+            .data,
+        image,
+      );
+      expect(
+        (sink.records.single.payload as HttpPayload).requestBody!.data,
+        redactionMarker,
+      );
+      expect(
+        (await d.exportRecords(['raw-image'])).text,
+        isNot(contains(image)),
+      );
+      expect(
+        (await d.exportRecords([
+          'raw-image',
+        ], representation: ExportRepresentation.asStored)).text,
+        contains(image),
+      );
+      d.redactionPolicy = RedactionPolicy(base64Images: false);
+      d.recordMode = RecordMode.redactBeforeRecording;
+      d.log(request('opt-out', body: const BodySnapshot.text(image)));
+      await Future<void>.value();
+      expect(
+        ((await d.getById('opt-out'))!.payload as HttpPayload)
+            .requestBody!
+            .data,
+        image,
+      );
+      expect(
+        (sink.records.last.payload as HttpPayload).requestBody!.data,
+        image,
+      );
+      expect((await d.exportRecords(['raw-image'])).text, contains(image));
+    },
+  );
+  test(
     'memory receipt is immediate and snapshots detach nested input',
     () async {
       final d = CodeKitDiagnostics();

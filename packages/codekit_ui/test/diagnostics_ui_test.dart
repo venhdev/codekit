@@ -514,6 +514,13 @@ void main() {
     expect(find.text('Drift (persistent)'), findsWidgets);
     expect(find.text('Headers: x-qa-secret'), findsOneWidget);
     expect(find.text('Body fields: password'), findsOneWidget);
+    expect(find.textContaining('Base64 images: on'), findsOneWidget);
+    diagnostics.redactionPolicy = RedactionPolicy(base64Images: false);
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Base64 images: off'), findsOneWidget);
     await tester.tap(find.text('Redact before recording'));
     await tester.pumpAndSettle();
     expect(diagnostics.recordMode, RecordMode.redactBeforeRecording);

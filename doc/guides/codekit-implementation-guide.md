@@ -3,7 +3,7 @@ title: CodeKit Application Implementation Guide
 description: Practical integration recipes, package composition, dev proxy setup, and turnkey coding-agent prompts for CodeKit.
 status: active
 created: 2026-10-11
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 # CodeKit Application Implementation Guide
@@ -160,7 +160,7 @@ diagnostic metadata; adapters do not add them to network request headers.
 The core-only setup works in Dart and Flutter. The default store is
 `MemoryDiagnosticStore`, the default record mode is `RecordMode.storeRaw`, and
 the default redaction policy enables the Authorization, Cookie, and Set-Cookie
-header presets. No sinks are installed unless they are passed at construction.
+header presets and the `base64Images` body preset. No sinks are installed unless they are passed at construction.
 
 ```dart
 import 'package:codekit_core/codekit_core.dart';
@@ -298,6 +298,11 @@ Available rules:
 - Header presets `authorization`, `cookie`, and `setCookie` default to enabled
   and match both request and response headers. Additional header rules match
   exact names case-insensitively and can target request, response, or both.
+- The `base64Images` preset defaults to enabled and masks complete base64 image
+  values in HTTP bodies, including nested JSON lists/objects. It recognizes
+  PNG/JPEG/GIF/WebP signatures, not complete image validity. Set it to `false`
+  to opt out; Store raw still bypasses recording redaction. See the canonical
+  policy for supported encodings and detection limits.
 - Query rules match exact parameter names. Repeated values are all replaced.
 - Body-field rules traverse simple dotted JSON object paths. They do not walk
   arrays or support wildcards, indices, or keys containing dots.
@@ -305,7 +310,7 @@ Available rules:
   including messages, errors, stack traces, body text, context strings, and
   header/query values. Map keys are not rewritten.
 
-The replacement marker is `[REDACTED]`. Built-in header presets run first;
+The replacement marker is `[REDACTED]`. Built-in header and base64-image presets run first;
 additional rules run in declaration order. Field rules affect captured JSON
 bodies and text bodies that can be parsed as JSON. A missing field or
 non-JSON text is unchanged; that does not prove the body is safe. Arbitrary
@@ -317,6 +322,7 @@ final policy = RedactionPolicy(
   authorization: true,
   cookie: true,
   setCookie: true,
+  base64Images: true,
   rules: [
     HeaderRedactionRule(
       {'x-api-key', 'x-session-token'},

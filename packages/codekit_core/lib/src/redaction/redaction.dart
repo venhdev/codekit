@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../models/records.dart';
+import 'base64_image_detector.dart';
 
 const redactionMarker = '[REDACTED]';
 
@@ -58,20 +59,62 @@ final class RedactionPolicy {
   final bool authorization;
   final bool cookie;
   final bool setCookie;
+  final bool base64Images;
   final List<RedactionRule>? rules;
   RedactionPolicy({
     bool? authorization,
     bool? cookie,
     bool? setCookie,
+    bool? base64Images,
     List<RedactionRule>? rules,
   }) : authorization = authorization ?? true,
        cookie = cookie ?? true,
        setCookie = setCookie ?? true,
+       base64Images = base64Images ?? true,
        rules = rules == null ? null : List.unmodifiable(rules);
   DiagnosticRecord apply(DiagnosticRecord record) {
     final map = jsonMap(_mutable(record.toJson()));
     final payload = jsonMap(map['payload']);
     map['payload'] = payload;
+    if (base64Images && payload['type'] == 'http') {
+      Object? mask(Object? value) {
+        if (value is String) {
+          return isBase64Image(value) ? redactionMarker : value;
+        }
+        if (value is List) return value.map(mask).toList();
+        if (value is Map) {
+          return value.map((key, child) => MapEntry(key, mask(child)));
+        }
+        return value;
+      }
+
+      void body(Object? value) {
+        if (value is! Map || value['state'] != 'captured') return;
+        if (value['representation'] == 'json') {
+          value['data'] = mask(value['data']);
+        } else if (value['representation'] == 'text') {
+          final original = value['data'] as String;
+          if (isBase64Image(original)) {
+            value['data'] = redactionMarker;
+            return;
+          }
+          try {
+            final parsed = jsonDecode(original);
+            final masked = mask(parsed);
+            if (jsonEncode(parsed) != jsonEncode(masked)) {
+              value['data'] = jsonEncode(masked);
+            }
+          } on FormatException {
+            // Ordinary text is preserved exactly.
+          }
+        }
+      }
+
+      body(payload['requestBody']);
+      if (payload['response'] is Map) {
+        body((payload['response'] as Map)['body']);
+      }
+    }
     final presets = [
       if (authorization) 'authorization',
       if (cookie) 'cookie',

@@ -159,7 +159,8 @@ class _DiagnosticsSettingsSheetState extends State<_DiagnosticsSettingsSheet> {
         Text(
           'Authorization: ${_enabled(policy.authorization)} · '
           'Cookie: ${_enabled(policy.cookie)} · '
-          'Set-Cookie: ${_enabled(policy.setCookie)}',
+          'Set-Cookie: ${_enabled(policy.setCookie)} · '
+          'Base64 images: ${_enabled(policy.base64Images)}',
         ),
         if (policy.rules == null || policy.rules!.isEmpty)
           const Text('No additional rules')

@@ -3,7 +3,7 @@ title: CodeKit Diagnostic Data Lifecycle
 description: Event recording, retention, Trace session, export, and sink behavior for CodeKit.
 status: active
 created: 2026-10-10
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 # CodeKit Diagnostic Data Lifecycle
@@ -57,7 +57,9 @@ Redaction policy is a separate developer-configurable contract shared by recordi
 
 ### Presets and supported rules
 
-`RedactionPolicy` exposes constructor parameters `authorization`, `cookie`, and `setCookie`, all enabled by default. These presets redact matching values in both request and response headers. Developers can disable individual presets and add built-in rules through the policy's rules list. Additional default presets are not selected.
+`RedactionPolicy` exposes constructor parameters `authorization`, `cookie`, and `setCookie`, all enabled by default. These presets redact matching values in both request and response headers. Developers can disable individual presets and add built-in rules through the policy's rules list. The `base64Images` preset is also enabled by default and can be disabled independently. It replaces an entire string value with `[REDACTED]` when the complete value has valid standard or URL-safe base64 syntax (with optional canonical padding) and its decoded prefix matches PNG, JPEG, GIF87a/GIF89a, or WebP. Data URIs ending their metadata with `;base64` are supported; the declared MIME type is not trusted. Whitespace, percent-encoded payloads, mixed alphabets, embedded fragments and malformed encodings are not matched. Header signatures do not prove that a complete image is valid; truncated or forged images with matching signatures may be masked too.
+
+This preset visits captured HTTP request and response bodies only: complete plain text values, recursively nested JSON string values in objects/lists, and text bodies parsed transiently as JSON. Keys and body representations are preserved; JSON text is re-encoded only when a value changes. It does not visit headers, query parameters, log fields, context or media metadata. Already-redacted markers remain unchanged. It runs alongside header presets and before additional rules, under the same recording/export/dispatch policy semantics. Detection scans the complete encoded value but decodes at most twelve prefix bytes; it does not decode or validate the complete image.
 
 | Rule naming direction | Supported selection | Behavior |
 | --- | --- | --- |
