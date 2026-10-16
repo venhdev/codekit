@@ -1,7 +1,6 @@
-import 'dart:io';
-
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
+
+import '../connection/connection.dart';
 
 part 'diagnostic_database.g.dart';
 
@@ -40,4 +39,4 @@ class DiagnosticDatabase extends _$DiagnosticDatabase {
 }
 
 QueryExecutor openNativeDatabase(String databasePath) =>
-    NativeDatabase.createInBackground(File(databasePath));
+    openConnection(databasePath);

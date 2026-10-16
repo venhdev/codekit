@@ -25,9 +25,9 @@ and redaction policies can be selected independently; storage and record mode
 each require one choice. Diagnostic sinks can be combined.
 
 ```text
-HTTP client capture & dev proxy (choose independently)
-[ ] Dio (interceptor capture, attachDevProxy, createCodeKitDio turnkey factory)
-[ ] package:http (wrapper capture, createDevProxyHttpClient, createCodeKitHttpClient turnkey factory)
+HTTP client capture (choose independently)
+[ ] Dio
+[ ] package:http
 
 Dev proxy controls (optional)
 [ ] Embeddable proxy card and preset dialog (Proxyman, Charles, Mitmproxy)
@@ -71,7 +71,6 @@ Flutter integrations (choose independently)
 | `codekit_webhook` | Records should be sent to Discord and/or Telegram | Requires network access; credentials must not be embedded in a public client app |
 | `codekit_flutter` | Flutter framework and root-isolate errors should be recorded | Installs process-global handlers explicitly |
 | `codekit_ui` | The app needs the in-app records viewer, Trace controls, settings, export UI, or dev proxy cards/session overrides | Flutter UI; does not create or own the diagnostics instance |
-
 
 The app creates one `CodeKitDiagnostics` instance and passes that same instance
 to every selected producer and UI. Core has no default global instance. Sinks
@@ -400,8 +399,10 @@ The factory accepts the same core settings as `CodeKitDiagnostics`, including
 sinks, URI exclusions, warning callback, and pending-write limit. The adapter
 creates the parent directory. It stores records and Trace sessions in native
 SQLite, uses explicit schema migrations, and skips malformed persisted rows
-with a warning. Web is not supported by this adapter in the current MVP; use
-memory storage there. The database is not encrypted by CodeKit. Store raw is
+with a warning. Web is not supported by this adapter in the current MVP; use memory
+storage there. The package establishes a Platform Connection Perimeter (stubbing
+native Drift and `dart:ffi` on Web) so consuming applications compile cleanly to
+Flutter Web without compiler errors. The database is not encrypted by CodeKit. Store raw is
 especially sensitive when persistence is enabled; use redaction deliberately
 and apply app-specific file protection/encryption if required.
 
@@ -702,7 +703,6 @@ For applications with existing dependency-injection pipelines, composable primit
 - **package:http**: `createDevProxyHttpClient(proxyProvider: ..., options: ...)`
 
 ## 9. Flutter error hooks
-
 
 Configure the app's own handlers first, then install CodeKit's optional global
 hooks:
@@ -1296,38 +1296,36 @@ items as scope and do not add unchecked integrations.
 
 Selected features:
 HTTP client capture (choose independently)
-- [ ] Dio
-- [ ] package:http
+[ ] Dio
+[ ] package:http
 
-Dev proxy tooling (choose independently)
-- [ ] Dio dev proxy routing
-- [ ] package:http dev proxy routing
-- [ ] Embeddable proxy card & dialog (Flutter UI)
-- [ ] In-viewer proxy session override (CodeKitViewerSettings)
+Dev proxy controls (optional)
+[ ] Embeddable proxy card and preset dialog (Proxyman, Charles, Mitmproxy)
+[ ] In-viewer proxy session override (via CodeKitViewerSettings)
 
 Storage (choose one)
-- ( ) In-memory
-- ( ) SQLite with Drift (native platforms only)
+( ) In-memory (default)
+( ) SQLite with Drift (native platforms)
 
 Record mode (choose one)
-- ( ) Redact before recording
-- ( ) Store raw
+( ) Redact before recording
+( ) Store raw
 
 Redaction policy (choose independently)
-- [ ] Auth & session headers (Authorization: Bearer/Basic, Cookie, Set-Cookie)
-- [ ] Base64 image payload masking (PNG, JPEG, GIF, WebP in bodies)
-- [ ] Custom rules (sensitive headers, query params, body fields, regex)
+[ ] Auth & session headers (Authorization: Bearer/Basic, Cookie, Set-Cookie)
+[ ] Base64 image payload masking (PNG, JPEG, GIF, WebP in bodies)
+[ ] Custom rules (sensitive headers, query params, body fields, regex)
 
 Diagnostic sinks (choose independently)
-- [ ] Colored console
-- [ ] Discord webhook
-- [ ] Telegram bot
+[ ] Colored console
+[ ] Discord webhook
+[ ] Telegram bot
 
 Flutter integrations (choose independently)
-- [ ] Floating trigger bubble (CodeKitBubble in MaterialApp.builder)
-- [ ] In-app diagnostics viewer screen (CodeKitDiagnosticsScreen)
-      <Trigger point: {appInfo | buildVersion}>
-- [ ] Flutter framework and root-isolate error capture
+[ ] Floating trigger bubble (CodeKitBubble in MaterialApp.builder)
+[ ] In-app diagnostics viewer screen (CodeKitDiagnosticsScreen)
+    <Trigger point: {appInfo | buildVersion}>
+[ ] Flutter framework and root-isolate error capture
 
 Before editing:
 1. Inspect the target app's architecture, supported platforms/SDK, dependency
@@ -1367,9 +1365,16 @@ Implementation rules:
   Delivery is fire-and-forget, drops while busy/cooling, and does not retry.
 - If Flutter hooks are selected, install after the app's own callbacks and
   dispose without overwriting callbacks another library installed later.
-- If the viewer is selected, use the app's navigator key and same diagnostics
-  instance. Make record-mode switching opt-in; policy and setup details remain
-  read-only in the viewer.
+- If Flutter UI is selected:
+  - If `Floating trigger bubble` is checked: wrap the app in `MaterialApp.builder`
+    using `CodeKitBubble` with the app's `navigatorKey`. `enabled` defaults to
+    `!kReleaseMode` to protect production releases automatically.
+  - If `In-app diagnostics viewer screen` is checked with `<Trigger point>`: locate
+    the target widget in the app (e.g. app version text in Settings/About) and wrap
+    it with a secret gesture (e.g. 5 taps in 2 seconds) that pushes
+    `CodeKitDiagnosticsScreen(diagnostics: diagnostics)`.
+  - Make record-mode switching opt-in; policy and setup details remain read-only
+    in the viewer.
 - Wire ownership and cleanup into the existing lifecycle. Close app clients
   separately; dispose diagnostics once. Do not claim a persistence drain.
 - Add focused tests with synthetic data; run format, analyzer, and relevant

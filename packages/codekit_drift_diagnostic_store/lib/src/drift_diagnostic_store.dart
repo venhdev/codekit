@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
-import 'dart:io';
 import 'dart:math';
 
 import 'package:codekit_core/codekit_core.dart';
 import 'package:drift/drift.dart';
 
+import 'connection/connection.dart';
 import 'database/diagnostic_database.dart';
 
 const int _idQueryBatchSize = 500;
@@ -64,9 +64,8 @@ final class DriftDiagnosticStore implements DiagnosticStore {
         'Must not be empty',
       );
     }
-    final file = File(databasePath).absolute;
-    await file.parent.create(recursive: true);
-    final database = _createDatabase(file.path);
+    await prepareDatabaseDirectory(databasePath);
+    final database = _createDatabase(databasePath);
     try {
       await database.customSelect('SELECT 1').getSingle();
       return DriftDiagnosticStore._(database, onWarning);
