@@ -23,11 +23,13 @@ MaterialApp(
 );
 ```
 
-The bubble is visible in all builds by default. Pass `debugOnly: true` to
-restrict it to debug builds. The caller owns `diagnostics` and closes it at the
-appropriate application lifecycle point. The screen is also usable directly
-as `CodeKitDiagnosticsScreen(diagnostics: diagnostics)` when the app wants to
-control navigation itself.
+The bubble is enabled in Debug and Profile builds by default (`enabled: !kReleaseMode`)
+and automatically hidden in Release builds to protect production environments.
+Pass custom conditions (e.g., `enabled: kDebugMode` for debug-only, `enabled: false`
+to rely solely on secret trigger gestures, or role/flavor checks). The caller
+owns `diagnostics` and closes it at the appropriate application lifecycle point.
+The screen is also usable directly as `CodeKitDiagnosticsScreen(diagnostics: diagnostics)`
+when the app wants to control navigation itself.
 
 The viewer can show the active `RedactionPolicy` and factual setup as read-only
 settings. Runtime record-mode switching is opt-in and affects new records

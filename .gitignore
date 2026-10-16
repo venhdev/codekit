@@ -1,6 +1,7 @@
 .agents/scratch/
 .agents/tasks/
 .agents/skills/
+.agents/host-toolchain.md
 skills-lock.json
 
 # FVM Version Cache
@@ -13,3 +14,4 @@ build/
 # Local environment configuration
 *.env
 .env
+.agents/host-toolchain.md

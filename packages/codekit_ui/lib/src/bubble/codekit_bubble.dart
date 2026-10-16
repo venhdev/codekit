@@ -14,14 +14,21 @@ class CodeKitBubble extends StatefulWidget {
     required this.child,
     required this.navigatorKey,
     required this.diagnostics,
-    this.debugOnly = false,
+    this.enabled = !kReleaseMode,
     this.viewerSettings = const CodeKitViewerSettings(),
   });
 
   final Widget child;
   final GlobalKey<NavigatorState> navigatorKey;
   final CodeKitDiagnostics diagnostics;
-  final bool debugOnly;
+
+  /// Whether the diagnostic bubble is active and rendered on the screen.
+  ///
+  /// Defaults to `!kReleaseMode` (visible in Debug and Profile builds, hidden in
+  /// Release builds). Callers can provide custom conditions (e.g. `kDebugMode`
+  /// or role-based flags) or pass `false` to disable the bubble entirely in
+  /// favor of direct screen navigation / secret gestures.
+  final bool enabled;
   final CodeKitViewerSettings viewerSettings;
 
   @override
@@ -97,7 +104,7 @@ class _CodeKitBubbleState extends State<CodeKitBubble> {
         fit: StackFit.expand,
         children: [
           widget.child,
-          if (!_open && (!widget.debugOnly || kDebugMode))
+          if (!_open && widget.enabled)
             Positioned(
               left: left,
               top: top,

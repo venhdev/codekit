@@ -3,7 +3,7 @@ title: CodeKit Diagnostics UI
 description: First UI contract for inspecting diagnostic records, managing Trace sessions, exporting records, and reusing recent searches.
 status: active
 created: 2026-10-10
-updated: 2026-10-14
+updated: 2026-10-16
 ---
 
 # CodeKit Diagnostics UI
@@ -298,7 +298,7 @@ Tap a row to reuse its query and mode; existing filters remain unchanged.
 └──────────────────────────────────┘
 ```
 
-The `1xx` and `Unknown` chips use neutral colors. The CodeKit bubble is placed in `MaterialApp.builder` with the same `navigatorKey` as the app; it remains available across app routes and is hidden while the viewer is open.
+The `1xx` and `Unknown` chips use neutral colors. The CodeKit bubble is placed in `MaterialApp.builder` with the same `navigatorKey` as the app; it remains available across app routes and is hidden while the viewer is open. Its visibility is governed by `enabled` (defaulting to `!kReleaseMode` to protect production releases while enabling debug and profile builds; callers can customize this with any boolean condition or disable it in favor of direct screen navigation via secret gestures).
 
 ## Dev proxy card and dialog
 

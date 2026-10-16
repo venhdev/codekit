@@ -840,4 +840,41 @@ void main() {
       expect(find.text('Copy failed'), findsOneWidget);
     },
   );
+
+  testWidgets('bubble visibility respects enabled flag', (tester) async {
+    final diagnostics = CodeKitDiagnostics();
+    final navigatorKey = GlobalKey<NavigatorState>();
+
+    // By default (!kReleaseMode in test environment), bubble is visible
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        builder: (context, child) => CodeKitBubble(
+          navigatorKey: navigatorKey,
+          diagnostics: diagnostics,
+          child: child!,
+        ),
+        home: const Scaffold(body: Text('Home')),
+      ),
+    );
+    expect(find.byIcon(Icons.bug_report_outlined), findsOneWidget);
+
+    // When explicitly disabled, bubble is not rendered
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        builder: (context, child) => CodeKitBubble(
+          navigatorKey: navigatorKey,
+          diagnostics: diagnostics,
+          enabled: false,
+          child: child!,
+        ),
+        home: const Scaffold(body: Text('Home')),
+      ),
+    );
+    expect(find.byIcon(Icons.bug_report_outlined), findsNothing);
+
+    await diagnostics.dispose();
+  });
 }
+

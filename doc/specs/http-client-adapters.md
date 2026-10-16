@@ -2,7 +2,7 @@
 title: CodeKit HTTP Client Adapters
 status: active
 created: 2026-10-11
-updated: 2026-10-13
+updated: 2026-10-16
 ---
 
 # CodeKit HTTP Client Adapters
@@ -115,4 +115,3 @@ final client = createCodeKitHttpClient(
   devProxyOptions: const DevProxyHttpOptions.permissiveDebug(),
 );
 ```
-

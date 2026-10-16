@@ -3,7 +3,7 @@ title: CodeKit Engineering Standards
 description: Cross-cutting code design, reuse, implementation, formatting and verification rules for CodeKit.
 status: active
 created: 2026-10-11
-updated: 2026-10-11
+updated: 2026-10-16
 ---
 
 # CodeKit Engineering Standards

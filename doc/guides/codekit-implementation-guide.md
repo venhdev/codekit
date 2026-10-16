@@ -3,7 +3,7 @@ title: CodeKit Application Implementation Guide
 description: Practical integration recipes, package composition, dev proxy setup, and turnkey coding-agent prompts for CodeKit.
 status: active
 created: 2026-10-11
-updated: 2026-10-15
+updated: 2026-10-16
 ---
 
 # CodeKit Application Implementation Guide
@@ -20,9 +20,9 @@ on pub.dev, or introduce speculative overrides.
 
 ## 1. Select the features
 
-Use this checklist as the feature scope. HTTP clients and Flutter integrations
-can be selected independently; storage and record mode each require one choice.
-Diagnostic sinks can be combined.
+Use this checklist as the feature scope. HTTP clients, Flutter integrations,
+and redaction policies can be selected independently; storage and record mode
+each require one choice. Diagnostic sinks can be combined.
 
 ```text
 HTTP client capture & dev proxy (choose independently)
@@ -34,8 +34,17 @@ Dev proxy controls (optional)
 [ ] In-viewer proxy session override (via CodeKitViewerSettings)
 
 Storage (choose one)
-[ ] In-memory (default)
-[ ] SQLite with Drift (native platforms)
+( ) In-memory (default)
+( ) SQLite with Drift (native platforms)
+
+Record mode (choose one)
+( ) Redact before recording
+( ) Store raw
+
+Redaction policy (choose independently)
+[ ] Auth & session headers (Authorization: Bearer/Basic, Cookie, Set-Cookie)
+[ ] Base64 image payload masking (PNG, JPEG, GIF, WebP in bodies)
+[ ] Custom rules (sensitive headers, query params, body fields, regex)
 
 Diagnostic sinks (choose independently)
 [ ] Colored console
@@ -43,12 +52,10 @@ Diagnostic sinks (choose independently)
 [ ] Telegram bot
 
 Flutter integrations (choose independently)
-[ ] In-app diagnostics viewer
+[ ] Floating trigger bubble (CodeKitBubble in MaterialApp.builder)
+[ ] In-app diagnostics viewer screen (CodeKitDiagnosticsScreen)
+    <Trigger point: {appInfo | buildVersion}>
 [ ] Flutter framework and root-isolate error capture
-
-Record mode (choose one)
-[ ] Redact before recording
-[ ] Store raw
 ```
 
 ### Package map
@@ -746,7 +753,7 @@ MaterialApp(
   builder: (context, child) => CodeKitBubble(
     diagnostics: diagnostics,
     navigatorKey: navigatorKey,
-    debugOnly: true,
+    // enabled: !kReleaseMode (default: visible in debug/profile, hidden in release)
     viewerSettings: CodeKitViewerSettings(
       allowRuntimeRecordModeChanges: false,
       devProxyProvider: () => devProxyState,
@@ -769,11 +776,14 @@ MaterialApp(
 );
 ```
 
-The bubble is visible in all builds unless `debugOnly: true`. It is draggable,
-available across app routes, and hidden while its viewer route is open. If the
-app owns its own navigation entry, use `CodeKitDiagnosticsScreen` directly and
-pass the same diagnostics object. The viewer is not required for recording,
-querying, Trace management, or export.
+The bubble is enabled in Debug and Profile builds by default (`enabled: !kReleaseMode`)
+and automatically hidden in Release builds to protect production environments.
+Developers can customize visibility using any boolean condition (e.g. `enabled: kDebugMode`
+for debug-only, `enabled: false` to disable the bubble entirely and rely on a secret trigger
+gesture, or environment/role checks). It is draggable, available across app routes, and
+hidden while its viewer route is open. If the app owns its own navigation entry, use
+`CodeKitDiagnosticsScreen` directly and pass the same diagnostics object. The viewer is
+not required for recording, querying, Trace management, or export.
 
 ### Settings shown in the viewer
 
@@ -1250,7 +1260,7 @@ never real service credentials.
 | Record is accepted but not in a persistent query yet | The write is still pending. Await that receipt's `persistedOrNull()` if the flow needs confirmation; do not assume pending records are queryable. |
 | Body says unsupported | Streamed responses from Dio or package:http send(), binary/unknown content types, decode failures, and readBytes() without a media type remain unsupported. Supported buffered JSON/text has no size limit. Never read ahead or drain a response to improve diagnostics. |
 | As-stored export still shows `[REDACTED]` | The record was redacted before it was stored. Removed values cannot be restored. |
-| Bubble is absent in release | `debugOnly: true` hides it outside debug mode. Set the intended visibility explicitly. |
+| Bubble is absent in release | `enabled` defaults to `!kReleaseMode`, automatically hiding the bubble in release builds to protect production users. Pass `enabled: true` or a custom condition if release visibility is explicitly intended. |
 | Records disappear after restart | Memory storage is process-local. Select Drift on a supported native platform and provide a stable application-owned path. |
 | Shutdown loses recent persistent records | Disposal is not a queue drain. Await individual confirmations where needed and design around best-effort writes. |
 
@@ -1285,22 +1295,9 @@ is the complete CodeKit integration contract for this task. Treat the checked
 items as scope and do not add unchecked integrations.
 
 Selected features:
-HTTP capture (choose independently)
+HTTP client capture (choose independently)
 - [ ] Dio
 - [ ] package:http
-
-Storage (choose one)
-- [ ] In-memory
-- [ ] SQLite with Drift (native platforms only)
-
-Diagnostic sinks (choose independently)
-- [ ] Colored console
-- [ ] Discord webhook
-- [ ] Telegram bot
-
-Flutter integrations (choose independently)
-- [ ] In-app diagnostics viewer
-- [ ] Flutter framework and root-isolate error capture
 
 Dev proxy tooling (choose independently)
 - [ ] Dio dev proxy routing
@@ -1308,9 +1305,29 @@ Dev proxy tooling (choose independently)
 - [ ] Embeddable proxy card & dialog (Flutter UI)
 - [ ] In-viewer proxy session override (CodeKitViewerSettings)
 
+Storage (choose one)
+- ( ) In-memory
+- ( ) SQLite with Drift (native platforms only)
+
 Record mode (choose one)
-- [ ] Redact before recording
-- [ ] Store raw
+- ( ) Redact before recording
+- ( ) Store raw
+
+Redaction policy (choose independently)
+- [ ] Auth & session headers (Authorization: Bearer/Basic, Cookie, Set-Cookie)
+- [ ] Base64 image payload masking (PNG, JPEG, GIF, WebP in bodies)
+- [ ] Custom rules (sensitive headers, query params, body fields, regex)
+
+Diagnostic sinks (choose independently)
+- [ ] Colored console
+- [ ] Discord webhook
+- [ ] Telegram bot
+
+Flutter integrations (choose independently)
+- [ ] Floating trigger bubble (CodeKitBubble in MaterialApp.builder)
+- [ ] In-app diagnostics viewer screen (CodeKitDiagnosticsScreen)
+      <Trigger point: {appInfo | buildVersion}>
+- [ ] Flutter framework and root-isolate error capture
 
 Before editing:
 1. Inspect the target app's architecture, supported platforms/SDK, dependency
@@ -1334,6 +1351,9 @@ Implementation rules:
 - Deliberately choose storage, count retention, redaction policy, URI exclusion,
   and record mode. Remember: Store raw is the default; exports default to
   Redacted; redaction cannot guarantee discovery of every secret.
+- If redaction policies are checked, configure `RedactionPolicy` with the
+  corresponding presets (`authorization` for Bearer/Basic/tokens, `base64Images`
+  for image body masking) or custom `rules` (`HeaderRedactionRule`, etc.).
 - If dev proxy tooling is selected, provide `proxyProvider`, guard
   `allowBadCertificates` (`false` by default) with an explicit `isDebug` check,
   and optionally use turnkey factories (`createCodeKitDio` or

@@ -55,13 +55,26 @@ can include multiple items. The [implementation guide](doc/guides/codekit-implem
 contains the setup sequence, integration constraints, and a full agent prompt.
 
 ```text
-HTTP capture (choose independently)
+HTTP client capture (choose independently)
 [ ] Dio
 [ ] package:http
 
+Dev proxy controls (optional)
+[ ] Embeddable proxy card and preset dialog (Proxyman, Charles, Mitmproxy)
+[ ] In-viewer proxy session override (via CodeKitViewerSettings)
+
 Storage (choose one)
-[ ] In-memory (default)
-[ ] SQLite with Drift (native platforms)
+( ) In-memory (default)
+( ) SQLite with Drift (native platforms)
+
+Record mode (choose one)
+( ) Redact before recording
+( ) Store raw
+
+Redaction policy (choose independently)
+[ ] Auth & session headers (Authorization: Bearer/Basic, Cookie, Set-Cookie)
+[ ] Base64 image payload masking (PNG, JPEG, GIF, WebP in bodies)
+[ ] Custom rules (sensitive headers, query params, body fields, regex)
 
 Diagnostic sinks (choose independently)
 [ ] Colored console
@@ -69,12 +82,10 @@ Diagnostic sinks (choose independently)
 [ ] Telegram bot
 
 Flutter integrations (choose independently)
-[ ] In-app diagnostics viewer
+[ ] Floating trigger bubble (CodeKitBubble in MaterialApp.builder)
+[ ] In-app diagnostics viewer screen (CodeKitDiagnosticsScreen)
+    <Trigger point: {appInfo | buildVersion}>
 [ ] Flutter framework and root-isolate error capture
-
-Record mode (choose one)
-[ ] Redact before recording
-[ ] Store raw
 
 Full setup guide and agent prompt (raw Markdown):
 https://raw.githubusercontent.com/venhdev/codekit/main/doc/guides/codekit-implementation-guide.md
