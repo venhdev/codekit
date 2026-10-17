@@ -2,14 +2,16 @@ import 'package:codekit_core/codekit_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../shared/codekit_bottom_sheet.dart';
+
 Future<void> showHttpFragmentCopyDialog(
   BuildContext context, {
   required CodeKitDiagnostics diagnostics,
   required String recordId,
   required HttpFragment fragment,
   HeaderTarget target = HeaderTarget.both,
-}) => showDialog<void>(
-  context: context,
+}) => showCodeKitDialog<void>(
+  context,
   builder: (context) => _HttpFragmentCopyDialog(
     diagnostics: diagnostics,
     recordId: recordId,

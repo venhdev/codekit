@@ -70,7 +70,7 @@ final class SinkDeliveryController {
     _busy = false;
   }
 
-  void disposed() {
+  void dispose() {
     _disposed = true;
     _busy = false;
   }

@@ -9,3 +9,5 @@ export 'src/records/codekit_diagnostics_screen.dart'
     show CodeKitDiagnosticsScreen;
 export 'src/settings/codekit_viewer_settings.dart'
     show CodeKitViewerSettings, CodeKitViewerSetupDetail;
+export 'src/shared/codekit_tag.dart'
+    show CodeKitTag, CodeKitTagStyle, CodeKitTagTheme;

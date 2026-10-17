@@ -8,6 +8,7 @@ import '../models/records.dart';
 import '../redaction/redaction.dart';
 import '../sinks/sinks.dart';
 import '../storage/storage.dart';
+import 'http_curl_formatter.dart';
 
 enum RecordDropReason {
   excluded,
@@ -494,39 +495,18 @@ class CodeKitDiagnostics {
                 'Request body:\n${bodyText(p.requestBody)}\n\nResponse body:\n${bodyText(p.response?.body)}';
           }
         case HttpFragment.curl:
-          String quote(String s) => "'${s.replaceAll("'", "'\\''")}'";
-          final parts = [
-            'curl',
-            '-X',
-            quote(p.method),
-            quote(p.uri.toString()),
-          ];
-          for (final entry
-              in p.requestHeaders?.entries ??
-                  <MapEntry<String, List<String>>>[]) {
-            for (final value in entry.value) {
-              parts.addAll(['-H', quote('${entry.key}: $value')]);
-            }
-          }
           final body = p.requestBody;
-          var incomplete =
+          final unreplayableBody =
+              body != null &&
+              body.state != BodyCaptureState.absent &&
+              (body.state != BodyCaptureState.captured ||
+                  body.representation == BodyRepresentation.media);
+          final incomplete =
               record.recordMode == RecordMode.redactBeforeRecording ||
-              representation == ExportRepresentation.redacted;
-          if (body?.state == BodyCaptureState.captured &&
-              body?.representation != BodyRepresentation.media) {
-            parts.addAll([
-              '--data-raw',
-              quote(
-                body!.representation == BodyRepresentation.text
-                    ? body.data as String
-                    : jsonEncode(body.data),
-              ),
-            ]);
-          } else if (body != null && body.state != BodyCaptureState.absent) {
-            incomplete = true;
-          }
+              representation == ExportRepresentation.redacted ||
+              unreplayableBody;
           text =
-              '${incomplete ? '# Diagnostic representation; replay may be incomplete\n' : ''}${parts.join(' ')}';
+              '${incomplete ? '# Diagnostic representation; replay may be incomplete\n' : ''}${formatHttpCurl(p)}';
       }
       return ExportResult.success(text, 1);
     } catch (_) {

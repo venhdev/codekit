@@ -4,6 +4,14 @@ import 'package:flutter/material.dart';
 import '../shared/codekit_bottom_sheet.dart';
 import 'records_controller.dart';
 
+Future<void> showFiltersSheet(
+  BuildContext context,
+  RecordsController controller,
+) => showCodeKitBottomSheet<void>(
+  context,
+  sheet: FiltersSheet(controller: controller),
+);
+
 class FiltersSheet extends StatefulWidget {
   const FiltersSheet({super.key, required this.controller});
   final RecordsController controller;

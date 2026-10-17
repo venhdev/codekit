@@ -10,6 +10,7 @@ import '../search_history/search_history_store.dart';
 import '../settings/codekit_viewer_settings.dart';
 import '../settings/diagnostics_settings_sheet.dart';
 import '../settings/codekit_viewer_theme.dart';
+import '../shared/codekit_bottom_sheet.dart';
 import '../traces/trace_sessions_sheet.dart';
 import '../shared/guarded_action.dart';
 import 'diagnostic_record_tile.dart';
@@ -221,8 +222,8 @@ class _DiagnosticsRecordsScreenState extends State<_DiagnosticsRecordsScreen> {
     if (ids.isEmpty) return;
     setState(() => _busy = true);
     try {
-      final confirmed = await showDialog<bool>(
-        context: context,
+      final confirmed = await showCodeKitDialog<bool>(
+        context,
         builder: (context) => AlertDialog(
           title: Text('Delete ${ids.length} records?'),
           content: const Text('Saved Trace sessions are kept.'),
@@ -329,17 +330,7 @@ class _DiagnosticsRecordsScreenState extends State<_DiagnosticsRecordsScreen> {
                   smallSize: 8,
                   child: const Icon(Icons.filter_list),
                 ),
-                onPressed: () => showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
-                  enableDrag: true,
-                  showDragHandle: false,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => CodeKitViewerTheme.wrap(
-                    context,
-                    FiltersSheet(controller: _controller),
-                  ),
-                ),
+                onPressed: () => showFiltersSheet(context, _controller),
               ),
             ],
           ),
@@ -451,11 +442,11 @@ class _DiagnosticsRecordsScreenState extends State<_DiagnosticsRecordsScreen> {
               }
               return false;
             },
-            child: ListView.separated(
+            child: ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               itemCount:
                   _controller.records.length + (_controller.loading ? 1 : 0),
-              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 if (index == _controller.records.length) {
                   return const Center(

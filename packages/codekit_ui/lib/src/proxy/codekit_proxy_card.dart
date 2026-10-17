@@ -1,6 +1,7 @@
 import 'package:codekit_core/codekit_core.dart';
 import 'package:flutter/material.dart';
 
+import '../shared/codekit_tag.dart';
 import 'codekit_proxy_dialog.dart';
 
 /// Embeddable card widget to monitor, toggle, and edit developer HTTP proxy settings.
@@ -32,7 +33,7 @@ class CodeKitProxyCard extends StatelessWidget {
 
   Color? _subtitleColor(BuildContext context) {
     if (config.isEnabled && config.isValid) {
-      return Colors.green[700];
+      return CodeKitTagTheme.of(context).success.foreground;
     }
     return Theme.of(context).colorScheme.onSurfaceVariant;
   }

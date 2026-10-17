@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../proxy/codekit_proxy_card.dart';
 import '../shared/codekit_bottom_sheet.dart';
+import '../shared/codekit_tag.dart';
 import 'codekit_viewer_settings.dart';
 import 'codekit_viewer_theme.dart';
 
@@ -49,6 +50,7 @@ class _DiagnosticsSettingsSheetState extends State<_DiagnosticsSettingsSheet> {
     _proxyConfig =
         widget.sessionProxyConfig ?? widget.settings.currentDevProxyConfig;
   }
+
   @override
   Widget build(BuildContext context) {
     final policy = widget.diagnostics.redactionPolicy;
@@ -100,21 +102,10 @@ class _DiagnosticsSettingsSheetState extends State<_DiagnosticsSettingsSheet> {
             children: [
               Text('Dev proxy', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(width: 8),
-              Container(
-                key: const Key('codekit-proxy-session-badge'),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  'Session override',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.onSecondaryContainer,
-                  ),
-                ),
+              const CodeKitTag.tonal(
+                key: Key('codekit-proxy-session-badge'),
+                label: 'Session override',
+                tone: DiagnosticTone.info,
               ),
             ],
           ),
@@ -131,8 +122,7 @@ class _DiagnosticsSettingsSheetState extends State<_DiagnosticsSettingsSheet> {
           CodeKitProxyCard(
             config: _proxyConfig,
             title: 'Dev Proxy (Session override)',
-            description:
-                'Applies to this session only. Does not persist across app restarts.',
+            description: 'Applies to this session only. Does not persist across app restarts.',
             onConfigChanged: (updated) {
               setState(() => _proxyConfig = updated);
               widget.onProxyConfigChanged?.call(updated);

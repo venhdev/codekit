@@ -104,8 +104,8 @@ class _TraceSessionsSheetState extends State<_TraceSessionsSheet> {
     var from = DateTime.now().subtract(const Duration(minutes: 10));
     var to = DateTime.now();
     var count = _countRecords(from, to);
-    final chosen = await showDialog<(DateTime, DateTime)>(
-      context: context,
+    final chosen = await showCodeKitDialog<(DateTime, DateTime)>(
+      context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, update) => AlertDialog(
           title: const Text('Create Trace session'),
@@ -188,8 +188,8 @@ class _TraceSessionsSheetState extends State<_TraceSessionsSheet> {
         final available = await widget.diagnostics.getByIds(session.recordIds);
         if (!mounted) return;
         if (available.isEmpty) {
-          final delete = await showDialog<bool>(
-            context: context,
+          final delete = await showCodeKitDialog<bool>(
+            context,
             builder: (context) => AlertDialog(
               title: const Text('No records available'),
               content: const Text(
@@ -229,8 +229,8 @@ class _TraceSessionsSheetState extends State<_TraceSessionsSheet> {
   }
 
   Future<void> _deleteSession(TraceSession session) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
+    final confirmed = await showCodeKitDialog<bool>(
+      context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Trace session?'),
         content: const Text('Its diagnostic records will be kept.'),

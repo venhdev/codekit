@@ -1,5 +1,6 @@
 import 'package:codekit_console/codekit_console.dart';
 import 'package:codekit_core/codekit_core.dart';
+import 'package:colored_logger/colored_logger.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -43,4 +44,22 @@ void main() {
       }
     },
   );
+
+  test('maps DiagnosticTone values to consistent ANSI styles', () {
+    expect(ColoredConsoleSink.stylesForTone(DiagnosticTone.neutral), [
+      Ansi.brightBlack,
+    ]);
+    expect(ColoredConsoleSink.stylesForTone(DiagnosticTone.info), [Ansi.blue]);
+    expect(ColoredConsoleSink.stylesForTone(DiagnosticTone.success), [
+      Ansi.green,
+    ]);
+    expect(ColoredConsoleSink.stylesForTone(DiagnosticTone.warning), [
+      Ansi.yellow,
+    ]);
+    expect(ColoredConsoleSink.stylesForTone(DiagnosticTone.danger), [Ansi.red]);
+    expect(ColoredConsoleSink.stylesForTone(DiagnosticTone.critical), [
+      Ansi.bold,
+      Ansi.red,
+    ]);
+  });
 }

@@ -1,6 +1,8 @@
 import 'package:codekit_core/codekit_core.dart';
 import 'package:flutter/material.dart';
 
+import '../shared/codekit_bottom_sheet.dart';
+
 /// Preset proxy port definitions.
 const List<({int port, String label})> _proxyPortPresets = [
   (port: 9090, label: '9090 (Proxyman)'),
@@ -12,8 +14,8 @@ const List<({int port, String label})> _proxyPortPresets = [
 Future<DevProxyConfig?> showCodeKitProxyDialog(
   BuildContext context, {
   required DevProxyConfig initialConfig,
-}) => showDialog<DevProxyConfig>(
-  context: context,
+}) => showCodeKitDialog<DevProxyConfig>(
+  context,
   builder: (context) => CodeKitProxyDialog(initialConfig: initialConfig),
 );
 
@@ -71,6 +73,7 @@ class _CodeKitProxyDialogState extends State<CodeKitProxyDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return AlertDialog(
       title: const Text('Configure Dev Proxy'),
       content: SingleChildScrollView(
@@ -78,9 +81,9 @@ class _CodeKitProxyDialogState extends State<CodeKitProxyDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Route app HTTP traffic through a debugging proxy running on your LAN computer.',
-              style: TextStyle(fontSize: 13, color: Colors.grey),
+              style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -127,7 +130,7 @@ class _CodeKitProxyDialogState extends State<CodeKitProxyDialog> {
               const SizedBox(height: 12),
               Text(
                 _errorMessage!,
-                style: const TextStyle(color: Colors.red, fontSize: 13),
+                style: TextStyle(color: colors.error, fontSize: 13),
               ),
             ],
           ],

@@ -8,7 +8,23 @@ enum StorageKind { memory, persistent }
 
 enum DiagnosticRecordType { log, http }
 
-enum DurationLevel { fast, normal, warn, slow, unknown }
+enum DurationLevel {
+  fast,
+  normal,
+  warn,
+  slow,
+  unknown;
+
+  DiagnosticTone get tone => switch (this) {
+    fast => DiagnosticTone.success,
+    normal => DiagnosticTone.info,
+    warn => DiagnosticTone.warning,
+    slow => DiagnosticTone.danger,
+    unknown => DiagnosticTone.neutral,
+  };
+
+  bool get isPromotedAlert => this == warn || this == slow;
+}
 
 class DurationThresholds {
   final Duration normalAt;
@@ -171,12 +187,56 @@ abstract interface class DiagnosticStore {
   Future<void> close();
 }
 
+/// Shared cursor scope generator and base64Url JSON cursor envelope codec.
+final class DiagnosticCursorCodec {
+  static const int version = 1;
+
+  const DiagnosticCursorCodec._();
+
+  static String createScope() =>
+      '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(0x100000000)}';
+
+  static int? decodeBefore({
+    required String? cursor,
+    required String scope,
+    required RecordQuery query,
+  }) {
+    if (cursor == null) return null;
+    try {
+      final decoded = jsonMap(jsonDecode(utf8.decode(base64Url.decode(cursor))));
+      if (decoded['v'] != version ||
+          decoded['scope'] != scope ||
+          decoded['query'] != query.fingerprint ||
+          decoded['before'] is! int) {
+        throw const FormatException();
+      }
+      return decoded['before'] as int;
+    } catch (_) {
+      throw ArgumentError('Invalid cursor or changed query');
+    }
+  }
+
+  static String encode({
+    required String scope,
+    required RecordQuery query,
+    required int before,
+  }) => base64Url.encode(
+    utf8.encode(
+      jsonEncode({
+        'v': version,
+        'scope': scope,
+        'query': query.fingerprint,
+        'before': before,
+      }),
+    ),
+  );
+}
+
 class MemoryDiagnosticStore implements DiagnosticStore {
   final _rows = <int, DiagnosticRecord>{};
   final _ids = <String, int>{};
   final _sessions = <String, TraceSession>{};
-  final _scope =
-      '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(0x100000000)}';
+  final _scope = DiagnosticCursorCodec.createScope();
   int _order = 0;
   bool _closed = false;
   @override
@@ -221,22 +281,11 @@ class MemoryDiagnosticStore implements DiagnosticStore {
   @override
   Future<RecordPage> query(RecordQuery query) async {
     _check();
-    int? before;
-    if (query.cursor != null) {
-      try {
-        final cursor = jsonMap(
-          jsonDecode(utf8.decode(base64Url.decode(query.cursor!))),
-        );
-        if (cursor['v'] != 1 ||
-            cursor['scope'] != _scope ||
-            cursor['query'] != query.fingerprint) {
-          throw FormatException();
-        }
-        before = cursor['before'] as int;
-      } catch (_) {
-        throw ArgumentError('Invalid cursor or changed query');
-      }
-    }
+    final before = DiagnosticCursorCodec.decodeBefore(
+      cursor: query.cursor,
+      scope: _scope,
+      query: query,
+    );
     final hits = <MapEntry<int, DiagnosticRecord>>[];
     for (final order in _rows.keys.toList().reversed) {
       if (before != null && order >= before) continue;
@@ -247,15 +296,10 @@ class MemoryDiagnosticStore implements DiagnosticStore {
     final visible = hits.take(query.limit).toList();
     final cursor = hits.length <= query.limit
         ? null
-        : base64Url.encode(
-            utf8.encode(
-              jsonEncode({
-                'v': 1,
-                'scope': _scope,
-                'query': query.fingerprint,
-                'before': visible.last.key,
-              }),
-            ),
+        : DiagnosticCursorCodec.encode(
+            scope: _scope,
+            query: query,
+            before: visible.last.key,
           );
     return RecordPage(visible.map((e) => e.value), cursor);
   }

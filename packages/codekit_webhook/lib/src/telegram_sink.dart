@@ -110,7 +110,7 @@ final class TelegramSink implements DiagnosticSink {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    _delivery.disposed();
+    _delivery.dispose();
     _ownedTransport?.close();
   }
 }

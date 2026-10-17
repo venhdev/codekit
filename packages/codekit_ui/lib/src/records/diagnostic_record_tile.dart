@@ -1,6 +1,8 @@
 import 'package:codekit_core/codekit_core.dart';
 import 'package:flutter/material.dart';
 
+import '../shared/codekit_tag.dart';
+
 class DiagnosticRecordTile extends StatelessWidget {
   const DiagnosticRecordTile({
     super.key,
@@ -24,133 +26,113 @@ class DiagnosticRecordTile extends StatelessWidget {
     final payload = record.payload;
     final time = TimeOfDay.fromDateTime(record.recordedAt.toLocal());
     final timestamp = time.format(context);
-    return InkWell(
-      onTap: selectionMode ? onSelect : onOpen,
-      onLongPress: selectionMode ? null : onLongPress,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-        decoration: selected
-            ? BoxDecoration(
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.primary,
-                  width: 1.5,
-                ),
-                borderRadius: BorderRadius.circular(8),
-              )
-            : null,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      _tag(context, payload is HttpPayload ? 'HTTP' : 'LOG'),
-                      if (payload is HttpPayload) ...[
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = selected
+        ? colors.primaryContainer.withValues(alpha: isDark ? 0.24 : 0.35)
+        : (isDark ? colors.surfaceContainerLow : colors.surfaceContainerLowest);
+    final borderColor = selected
+        ? colors.primary
+        : colors.outlineVariant.withValues(alpha: selectionMode ? 0.65 : 0.35);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Material(
+        color: backgroundColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: borderColor, width: 1.5),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: selectionMode ? onSelect : onOpen,
+          onLongPress: selectionMode ? null : onLongPress,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CodeKitTag.recordKind(
+                      recordType: payload is HttpPayload
+                          ? DiagnosticRecordType.http
+                          : DiagnosticRecordType.log,
+                    ),
+                    if (payload is HttpPayload) ...[
+                      const SizedBox(width: 4),
+                      CodeKitTag.tonal(
+                        label: payload.response?.statusCode?.toString() ?? '—',
+                        tone: HttpStatusGroup.fromCode(
+                          payload.response?.statusCode,
+                        ).tone,
+                      ),
+                      if (payload.duration != null) ...[
                         const SizedBox(width: 4),
-                        _tag(
-                          context,
-                          payload.response?.statusCode?.toString() ?? '—',
-                          color: _statusColor(
-                            context,
-                            HttpStatusGroup.fromCode(
-                              payload.response?.statusCode,
-                            ),
+                        CodeKitTag.duration(
+                          label: '${payload.duration!.inMilliseconds} ms',
+                          durationLevel: DurationThresholds().classify(
+                            payload.duration,
                           ),
                         ),
-                        if (payload.duration != null) ...[
-                          const SizedBox(width: 4),
-                          _tag(
-                            context,
-                            '${payload.duration!.inMilliseconds} ms',
-                            color: _durationColor(
-                              context,
-                              DurationThresholds().classify(payload.duration),
-                            ),
-                          ),
-                        ],
-                      ] else if (payload is LogPayload) ...[
-                        const SizedBox(width: 4),
-                        _tag(context, payload.level.name.toUpperCase()),
                       ],
-                      const Spacer(),
-                      Text(
-                        timestamp,
-                        style: Theme.of(context).textTheme.labelSmall,
+                    ] else if (payload is LogPayload) ...[
+                      const SizedBox(width: 4),
+                      CodeKitTag.tonal(
+                        label: payload.level.name.toUpperCase(),
+                        tone: payload.level.tone,
                       ),
+                      if (payload.tags != null)
+                        for (final tag in payload.tags!.take(2)) ...[
+                          const SizedBox(width: 4),
+                          CodeKitTag.customTag(tag: tag),
+                        ],
                     ],
-                  ),
-                  const SizedBox(height: 6),
-                  if (payload is HttpPayload) ...[
+                    const Spacer(),
                     Text(
-                      '${payload.method} ${payload.uri}',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (payload.error != null)
-                      Text(
-                        payload.error!.message,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      timestamp,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colors.onSurfaceVariant,
                       ),
-                  ] else if (payload is LogPayload) ...[
-                    Text(
-                      payload.message,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                    if (record.source != null)
-                      Text(
-                        record.source!,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
                   ],
+                ),
+                const SizedBox(height: 6),
+                if (payload is HttpPayload) ...[
+                  Text(
+                    '${payload.method} ${payload.uri}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (payload.error != null)
+                    Text(
+                      payload.error!.message,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.error,
+                      ),
+                    ),
+                ] else if (payload is LogPayload) ...[
+                  Text(
+                    payload.message,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (record.source != null)
+                    Text(
+                      record.source!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
                 ],
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
-
-  Widget _tag(BuildContext context, String text, {Color? color}) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-    decoration: BoxDecoration(
-      color: color ?? Theme.of(context).colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Text(
-      text,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-        color:
-            color == null ||
-                color == Theme.of(context).colorScheme.surfaceContainerHighest
-            ? Theme.of(context).colorScheme.onSurface
-            : Colors.black87,
-      ),
-    ),
-  );
-
-  Color _statusColor(BuildContext context, HttpStatusGroup group) =>
-      switch (group) {
-        HttpStatusGroup.success => Colors.green.shade200,
-        HttpStatusGroup.redirection => Colors.blue.shade200,
-        HttpStatusGroup.clientError => Colors.orange.shade200,
-        HttpStatusGroup.serverError => Colors.red.shade200,
-        _ => Theme.of(context).colorScheme.surfaceContainerHighest,
-      };
-
-  Color _durationColor(BuildContext context, DurationLevel level) =>
-      switch (level) {
-        DurationLevel.fast => Colors.green.shade200,
-        DurationLevel.normal => Colors.blue.shade200,
-        DurationLevel.warn => Colors.orange.shade200,
-        DurationLevel.slow => Colors.red.shade200,
-        DurationLevel.unknown => Theme.of(
-          context,
-        ).colorScheme.surfaceContainerHighest,
-      };
 }

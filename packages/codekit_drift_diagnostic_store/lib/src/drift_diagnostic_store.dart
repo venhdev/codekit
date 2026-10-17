@@ -10,7 +10,6 @@ import 'database/diagnostic_database.dart';
 
 const int _idQueryBatchSize = 500;
 const int _queryScanBatchSize = 256;
-const int _cursorVersion = 1;
 
 typedef DriftStoreWarningCallback = void Function(
   String message,
@@ -46,8 +45,7 @@ final class DriftDiagnosticStore implements DiagnosticStore {
   bool _closed = false;
 
   DriftDiagnosticStore._(this._database, this._onWarning)
-    : _cursorScope =
-          '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(0x100000000)}';
+    : _cursorScope = DiagnosticCursorCodec.createScope();
 
   /// Opens a native SQLite database at [databasePath].
   ///
@@ -183,7 +181,11 @@ final class DriftDiagnosticStore implements DiagnosticStore {
   @override
   Future<RecordPage> query(RecordQuery query) async {
     _checkOpen();
-    final before = _decodeCursor(query);
+    final before = DiagnosticCursorCodec.decodeBefore(
+      cursor: query.cursor,
+      scope: _cursorScope,
+      query: query,
+    );
     final matching = <({int order, DiagnosticRecord record})>[];
     var scanBefore = before;
     while (matching.length <= query.limit) {
@@ -214,39 +216,14 @@ final class DriftDiagnosticStore implements DiagnosticStore {
     final hasMore = matching.length > query.limit;
     final visible = matching.take(query.limit).toList();
     final nextCursor = hasMore && visible.isNotEmpty
-        ? _encodeCursor(query, visible.last.order)
+        ? DiagnosticCursorCodec.encode(
+            scope: _cursorScope,
+            query: query,
+            before: visible.last.order,
+          )
         : null;
     return RecordPage(visible.map((entry) => entry.record), nextCursor);
   }
-
-  int? _decodeCursor(RecordQuery query) {
-    final value = query.cursor;
-    if (value == null) return null;
-    try {
-      final decoded = jsonDecode(utf8.decode(base64Url.decode(value)));
-      if (decoded is! Map<String, dynamic> ||
-          decoded['v'] != _cursorVersion ||
-          decoded['scope'] != _cursorScope ||
-          decoded['query'] != query.fingerprint ||
-          decoded['before'] is! int) {
-        throw const FormatException();
-      }
-      return decoded['before'] as int;
-    } catch (_) {
-      throw ArgumentError('Invalid cursor or changed query');
-    }
-  }
-
-  String _encodeCursor(RecordQuery query, int before) => base64Url.encode(
-    utf8.encode(
-      jsonEncode({
-        'v': _cursorVersion,
-        'scope': _cursorScope,
-        'query': query.fingerprint,
-        'before': before,
-      }),
-    ),
-  );
 
   @override
   Future<int> deleteByIds(List<String> ids) async {

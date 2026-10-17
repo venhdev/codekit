@@ -1,5 +1,4 @@
 import 'dart:developer' as developer;
-import 'dart:convert';
 
 import 'package:codekit_core/codekit_core.dart';
 
@@ -32,6 +31,7 @@ final class DiscordSinkOptions {
   final Uri? avatarUrl;
   final String? title;
   final int? color;
+  final bool? useSemanticColor;
   final String? footer;
   final bool? includeTimestamp;
 
@@ -40,10 +40,29 @@ final class DiscordSinkOptions {
     this.avatarUrl,
     this.title,
     this.color,
+    this.useSemanticColor,
     this.footer,
     this.includeTimestamp,
   });
 }
+
+/// Resolves a semantic Discord embed integer color (`0xRRGGBB`) for [tone].
+int discordColorForTone(DiagnosticTone tone) => switch (tone) {
+  DiagnosticTone.neutral => 0x64748B,
+  DiagnosticTone.info => 0x3B82F6,
+  DiagnosticTone.success => 0x10B981,
+  DiagnosticTone.warning => 0xF59E0B,
+  DiagnosticTone.danger => 0xEF4444,
+  DiagnosticTone.critical => 0x9333EA,
+};
+
+/// Resolves a semantic Discord embed integer color (`0xRRGGBB`) for [record].
+int discordColorForRecord(DiagnosticRecord record) => switch (record.payload) {
+  LogPayload payload => discordColorForTone(payload.level.tone),
+  HttpPayload payload => discordColorForTone(
+    HttpStatusGroup.fromCode(payload.response?.statusCode).tone,
+  ),
+};
 
 /// Telegram sendMessage options supported by the MVP.
 final class TelegramSinkOptions {
@@ -131,8 +150,7 @@ String recordDetails(
     case HttpPayload payload:
       sections.add(recordSummary(record));
       if (options?.curl ?? false) {
-        final curl = _formatCurl(payload);
-        if (curl != null) sections.add('cURL:\n$curl');
+        sections.add('cURL:\n${formatHttpCurl(payload)}');
       }
       if ((options?.requestHeaders ?? false) &&
           payload.requestHeaders != null) {
@@ -176,30 +194,3 @@ String _formatBody(BodySnapshot body) => switch (body.state) {
   BodyCaptureState.disabled => '(capture disabled)',
   BodyCaptureState.unsupported => '(unsupported body)',
 };
-
-String? _formatCurl(HttpPayload payload) {
-  final parts = <String>[
-    'curl',
-    '-X',
-    _shellQuote(payload.method),
-    _shellQuote(payload.uri.toString()),
-  ];
-  for (final entry
-      in payload.requestHeaders?.entries ??
-          const <MapEntry<String, List<String>>>[]) {
-    for (final value in entry.value) {
-      parts.addAll(['-H', _shellQuote('${entry.key}: $value')]);
-    }
-  }
-  final body = payload.requestBody;
-  if (body?.state == BodyCaptureState.captured &&
-      body?.representation != BodyRepresentation.media) {
-    final value = body!.representation == BodyRepresentation.json
-        ? jsonEncode(body.data)
-        : body.data.toString();
-    parts.addAll(['--data-raw', _shellQuote(value)]);
-  }
-  return parts.join(' ');
-}
-
-String _shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";

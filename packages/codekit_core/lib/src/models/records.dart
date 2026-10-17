@@ -2,7 +2,24 @@ import 'dart:collection';
 
 const int diagnosticRecordSchemaVersion = 1;
 
-enum LogLevel { trace, debug, info, warning, error, fatal }
+enum DiagnosticTone { neutral, info, success, warning, danger, critical }
+
+enum LogLevel {
+  trace,
+  debug,
+  info,
+  warning,
+  error,
+  fatal;
+
+  DiagnosticTone get tone => switch (this) {
+    trace || debug => DiagnosticTone.neutral,
+    info => DiagnosticTone.info,
+    warning => DiagnosticTone.warning,
+    error => DiagnosticTone.danger,
+    fatal => DiagnosticTone.critical,
+  };
+}
 
 enum RecordMode { redactBeforeRecording, storeRaw }
 
@@ -17,6 +34,14 @@ enum HttpStatusGroup {
   clientError,
   serverError,
   unknown;
+
+  DiagnosticTone get tone => switch (this) {
+    informational || unknown => DiagnosticTone.neutral,
+    success => DiagnosticTone.success,
+    redirection => DiagnosticTone.info,
+    clientError => DiagnosticTone.warning,
+    serverError => DiagnosticTone.danger,
+  };
 
   static HttpStatusGroup fromCode(int? code) {
     if (code == null) return unknown;

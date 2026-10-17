@@ -195,6 +195,28 @@ void main() {
       expect(payload['text'], contains('(truncated)'));
       sink.dispose();
     });
+
+    test('resolves semantic Discord embed colors when opted in', () async {
+      expect(discordColorForTone(DiagnosticTone.neutral), 0x64748B);
+      expect(discordColorForTone(DiagnosticTone.info), 0x3B82F6);
+      expect(discordColorForTone(DiagnosticTone.success), 0x10B981);
+      expect(discordColorForTone(DiagnosticTone.warning), 0xF59E0B);
+      expect(discordColorForTone(DiagnosticTone.danger), 0xEF4444);
+      expect(discordColorForTone(DiagnosticTone.critical), 0x9333EA);
+
+      final transport = _FakeTransport();
+      final sink = DiscordSink(
+        webhookUrl: Uri.parse('https://discord.test/hooks/secret'),
+        transport: transport,
+        options: const DiscordSinkOptions(useSemanticColor: true),
+        httpDispatchPolicy: HttpDispatchPolicy(),
+      );
+      sink.dispatch(_httpRecord());
+      final request = await transport.request.future;
+      final payload = jsonDecode(utf8.decode(request.body)) as Map;
+      expect((payload['embeds'] as List).single['color'], 0xEF4444);
+      sink.dispose();
+    });
   });
 }
 

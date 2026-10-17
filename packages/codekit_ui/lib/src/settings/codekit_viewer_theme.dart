@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../shared/codekit_tag.dart';
+
 /// Keeps the viewer's theme separate from the host application's theme.
 class CodeKitViewerTheme extends StatefulWidget {
   const CodeKitViewerTheme({
@@ -60,6 +62,11 @@ class _CodeKitViewerThemeState extends State<CodeKitViewerTheme> {
                 seedColor: seed,
                 brightness: brightness,
               ),
+              extensions: [
+                brightness == Brightness.dark
+                    ? const CodeKitTagTheme.dark()
+                    : const CodeKitTagTheme.light(),
+              ],
             ),
             child: child!,
           ),

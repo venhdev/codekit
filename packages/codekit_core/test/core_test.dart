@@ -796,26 +796,47 @@ void main() {
       expect(curl.text, isNot(contains('--data-raw')));
     },
   );
-  test(
-    'memory store returning failing Future drops record with storageFailed and warns',
-    () async {
-      final warnings = <DiagnosticWarning>[];
-      final fakeMemoryStore = _AsyncFailingMemoryStore();
-      final d = CodeKitDiagnostics(
-        store: fakeMemoryStore,
-        onWarning: warnings.add,
-      );
-      addTearDown(d.dispose);
-      final receipt = d.log(const LogInput(message: 'test'));
-      expect(receipt.accepted, isFalse);
-      expect(receipt.dropReason, RecordDropReason.storageFailed);
-      await pumpEventQueue();
-      expect(
-        warnings.any((w) => w.code == 'storage_async_violation'),
-        isTrue,
-      );
-    },
-  );
+  test('memory store returning failing Future drops record with storageFailed and warns', () async {
+    final warnings = <DiagnosticWarning>[];
+    final fakeMemoryStore = _AsyncFailingMemoryStore();
+    final d = CodeKitDiagnostics(
+      store: fakeMemoryStore,
+      onWarning: warnings.add,
+    );
+    addTearDown(d.dispose);
+    final receipt = d.log(const LogInput(message: 'test'));
+    expect(receipt.accepted, isFalse);
+    expect(receipt.dropReason, RecordDropReason.storageFailed);
+    await pumpEventQueue();
+    expect(warnings.any((w) => w.code == 'storage_async_violation'), isTrue);
+  });
+  test('DiagnosticTone maps LogLevel, HttpStatusGroup and DurationLevel deterministically', () {
+    expect(LogLevel.trace.tone, DiagnosticTone.neutral);
+    expect(LogLevel.debug.tone, DiagnosticTone.neutral);
+    expect(LogLevel.info.tone, DiagnosticTone.info);
+    expect(LogLevel.warning.tone, DiagnosticTone.warning);
+    expect(LogLevel.error.tone, DiagnosticTone.danger);
+    expect(LogLevel.fatal.tone, DiagnosticTone.critical);
+
+    expect(HttpStatusGroup.informational.tone, DiagnosticTone.neutral);
+    expect(HttpStatusGroup.unknown.tone, DiagnosticTone.neutral);
+    expect(HttpStatusGroup.success.tone, DiagnosticTone.success);
+    expect(HttpStatusGroup.redirection.tone, DiagnosticTone.info);
+    expect(HttpStatusGroup.clientError.tone, DiagnosticTone.warning);
+    expect(HttpStatusGroup.serverError.tone, DiagnosticTone.danger);
+
+    expect(DurationLevel.fast.tone, DiagnosticTone.success);
+    expect(DurationLevel.normal.tone, DiagnosticTone.info);
+    expect(DurationLevel.warn.tone, DiagnosticTone.warning);
+    expect(DurationLevel.slow.tone, DiagnosticTone.danger);
+    expect(DurationLevel.unknown.tone, DiagnosticTone.neutral);
+
+    expect(DurationLevel.fast.isPromotedAlert, isFalse);
+    expect(DurationLevel.normal.isPromotedAlert, isFalse);
+    expect(DurationLevel.unknown.isPromotedAlert, isFalse);
+    expect(DurationLevel.warn.isPromotedAlert, isTrue);
+    expect(DurationLevel.slow.isPromotedAlert, isTrue);
+  });
 }
 
 class _AsyncFailingMemoryStore implements DiagnosticStore {

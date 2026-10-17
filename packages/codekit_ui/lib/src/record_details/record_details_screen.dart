@@ -4,6 +4,8 @@ import 'package:codekit_core/codekit_core.dart';
 import 'package:flutter/material.dart';
 
 import '../export/http_fragment_copy_dialog.dart';
+import '../shared/codekit_bottom_sheet.dart';
+import '../shared/codekit_tag.dart';
 
 class RecordDetailsScreen extends StatelessWidget {
   const RecordDetailsScreen({
@@ -29,8 +31,8 @@ class RecordDetailsScreen extends StatelessWidget {
           IconButton(
             tooltip: 'Record information',
             icon: const Icon(Icons.info_outline),
-            onPressed: () => showDialog<void>(
-              context: context,
+            onPressed: () => showCodeKitDialog<void>(
+              context,
               builder: (context) => AlertDialog(
                 title: const Text('Record information'),
                 content: Column(
@@ -74,11 +76,21 @@ class _LogDetails extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
     padding: const EdgeInsets.all(12),
     children: [
-      if (record.source != null) Text('Source: ${record.source}'),
-      Text(
-        payload.level.name.toUpperCase(),
-        style: Theme.of(context).textTheme.titleMedium,
+      Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          const CodeKitTag.recordKind(recordType: DiagnosticRecordType.log),
+          CodeKitTag.tonal(
+            label: payload.level.name.toUpperCase(),
+            tone: payload.level.tone,
+          ),
+          if (payload.tags != null)
+            for (final tag in payload.tags!) CodeKitTag.customTag(tag: tag),
+        ],
       ),
+      const SizedBox(height: 8),
+      if (record.source != null) Text('Source: ${record.source}'),
       SelectableText(payload.message),
       if (payload.error != null)
         SelectableText('${payload.error!.type}: ${payload.error!.message}'),
@@ -126,6 +138,29 @@ class _HttpDetails extends StatelessWidget {
               ListView(
                 padding: const EdgeInsets.all(12),
                 children: [
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      const CodeKitTag.recordKind(
+                        recordType: DiagnosticRecordType.http,
+                      ),
+                      CodeKitTag.tonal(
+                        label: payload.response?.statusCode?.toString() ?? '—',
+                        tone: HttpStatusGroup.fromCode(
+                          payload.response?.statusCode,
+                        ).tone,
+                      ),
+                      if (payload.duration != null)
+                        CodeKitTag.duration(
+                          label: '${payload.duration!.inMilliseconds} ms',
+                          durationLevel: DurationThresholds().classify(
+                            payload.duration,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                   SelectableText('${payload.method} ${payload.uri}'),
                   Text('Status: ${payload.response?.statusCode ?? 'Unknown'}'),
                   Text(

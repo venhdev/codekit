@@ -24,7 +24,7 @@ The view provides:
 - A filter sheet opened from the search-row Filters icon. The result count appears beneath the search bar; when active filters exist, a horizontal scrollable row of active filter chips sits below the results row, allowing inspection and one-tap removal of active filter criteria.
 - While cursor pagination has more pages, the visible count is a lower bound (for example, `128+ results`); the UI does not run a separate full-count scan on every search.
 - Multi-select status chips for `1xx`, `2xx`, `3xx`, `4xx`, `5xx`, and `Unknown` (missing/out-of-range HTTP status and app logs); a from/to time range; duration categories (`fast`, `normal`, `warn`, `slow`, and no-duration); and record type (`app log` or `HTTP`).
-- The main list has two modes. **List-only** is the default: rows open details and do not show checkboxes or bulk actions. Long-pressing a row enters **Selection** mode and selects that row. Selection mode keeps search and filter controls in place, shows the total selected count (including IDs outside the current list), and marks selected rows with an outline instead of row checkboxes. Row taps toggle selection. The leading action becomes Close (`X`) and clears selection on exit. It has no Done or app-bar multi-select action.
+- The main list has two modes. **List-only** is the default: rows are rendered as inset contained cards without full-bleed dividers, open details on tap, and do not show checkboxes or bulk actions. Long-pressing a row enters **Selection** mode and selects that row. Selection mode keeps search and filter controls in place, shows the total selected count (including IDs outside the current list), and marks selected rows with a primary outline and tonal container fill (preserving constant border width so toggling selection never shifts row layout) instead of row checkboxes. Row taps toggle selection. The leading action becomes Close (`X`) and clears selection on exit. It has no Done or app-bar multi-select action.
 - Pull-to-refresh reloads the list in list-only mode. Reload in the app bar has the same result for an explicit refresh.
 - Selection mode has one full-width bottom action row: a tri-state checkbox, an expanding filled Share button with a share icon, and a delete icon with error-container colors. Share opens Confirm Export for all selected IDs. Delete confirms the selected count. Both are disabled when nothing is selected or an action is busy; searching or filtering alone does not export data.
 
@@ -32,14 +32,14 @@ The checkbox reflects the loaded list only: checked when all its IDs are selecte
 
 Recent searches can be reapplied from Search history. Search regex is a view filter; endpoint exclusion regex prevents capture and does not select export results.
 
-Rows use distinct layouts by record type:
+Rows use distinct layouts by record type and a 3-tier semantic tag hierarchy (`CodeKitTagTheme` mapped from `DiagnosticTone`):
 
-- **HTTP:** the first line shows record type, status code, duration, and timestamp. Duration is shown as a value such as `42 ms`; its chip background color represents the duration level. The second line shows method and URI, with the method/URI area limited to two lines. A concise request/response summary may follow when available. The stable record ID is available in record details.
-- **App log:** show type and log level with timestamp, followed by a concise message preview and source when available.
+- **HTTP:** the first line shows a structural `HTTP` kind badge (Tier 2), a semantic status code badge (Tier 1), a duration badge (Tier 3), and timestamp. Duration is shown as a value such as `42 ms`; `fast` and `normal` durations use a neutral surface with a semantic indicator dot and text so they do not visually collide with the status badge, while `warn` and `slow` durations promote to full warning/danger tonal fills. The second line shows method and URI, with the method/URI area limited to two lines. A concise request/response summary may follow when available. The stable record ID is available in record details.
+- **App log:** show a structural `LOG` kind badge (Tier 2), a semantic log level badge (Tier 1: `neutral` for trace/debug, `info` for info, `warning` for warning, `danger` for error, `critical` for fatal), and up to two `#tag` custom chips (Tier 2) with timestamp, followed by a concise message preview and source when available.
 
 Changing search/filter, reloading or changing Trace scope preserves selected IDs. Successful deletion removes the deleted IDs from selection; cancellation/failure preserves selection. Leaving Selection mode clears selection. Share/Delete operate on a captured selected-ID list, including IDs hidden by the current query, and never include unselected matches.
 
-Tapping a row opens its record details. In Selection mode, tapping the row adds or removes the record from the current multi-selection; selected rows are outlined instead of showing checkboxes. There is no persistent preview pane on the main screen.
+Tapping a row opens its record details. In Selection mode, tapping the row adds or removes the record from the current multi-selection; selected rows receive a primary outline and tonal fill instead of showing checkboxes. There is no persistent preview pane on the main screen.
 
 ## Record details and HTTP inspector
 

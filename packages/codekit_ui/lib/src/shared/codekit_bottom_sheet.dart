@@ -9,18 +9,32 @@ import '../settings/codekit_viewer_theme.dart';
 /// scrolling so every sheet behaves consistently.
 Future<T?> showCodeKitBottomSheet<T>(
   BuildContext context, {
-  required Widget body,
+  Widget? body,
   List<Widget> actions = const [],
-}) => showModalBottomSheet<T>(
+  Widget? sheet,
+}) {
+  assert(body != null || sheet != null);
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: true,
+    enableDrag: true,
+    showDragHandle: false,
+    backgroundColor: Colors.transparent,
+    builder: (_) => CodeKitViewerTheme.wrap(
+      context,
+      sheet ?? CodeKitBottomSheet(body: body!, actions: actions),
+    ),
+  );
+}
+
+/// Standard dialog launcher that preserves the active [CodeKitViewerTheme].
+Future<T?> showCodeKitDialog<T>(
+  BuildContext context, {
+  required WidgetBuilder builder,
+}) => showDialog<T>(
   context: context,
-  isScrollControlled: true,
-  enableDrag: true,
-  showDragHandle: false,
-  backgroundColor: Colors.transparent,
-  builder: (_) => CodeKitViewerTheme.wrap(
-    context,
-    CodeKitBottomSheet(body: body, actions: actions),
-  ),
+  builder: (dialogContext) =>
+      CodeKitViewerTheme.wrap(context, Builder(builder: builder)),
 );
 
 class CodeKitBottomSheet extends StatelessWidget {

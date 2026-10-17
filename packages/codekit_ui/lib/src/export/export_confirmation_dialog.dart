@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../platform/export_delivery.dart';
+import '../shared/codekit_bottom_sheet.dart';
 import '../shared/guarded_action.dart';
 
 /// Confirms the representation at the point where data leaves CodeKit.
@@ -10,8 +11,8 @@ Future<void> showExportConfirmation(
   BuildContext context, {
   required Future<ExportResult> Function(ExportRepresentation) export,
   int? selectedCount,
-}) => showDialog<void>(
-  context: context,
+}) => showCodeKitDialog<void>(
+  context,
   builder: (context) =>
       _ExportConfirmation(export: export, selectedCount: selectedCount),
 );
@@ -67,7 +68,9 @@ class _ExportConfirmationState extends State<_ExportConfirmation> {
             Navigator.of(context).pop();
             messenger.showSnackBar(
               SnackBar(
-                content: Text(share ? 'Shared diagnostics' : 'Copied diagnostics'),
+                content: Text(
+                  share ? 'Shared diagnostics' : 'Copied diagnostics',
+                ),
               ),
             );
           }

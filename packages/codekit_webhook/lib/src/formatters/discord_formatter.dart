@@ -17,10 +17,15 @@ Map<String, Object?> discordPayload(
     recordDetails(record, contentOptions),
     descriptionLimit,
   );
+  final color =
+      options?.color ??
+      ((options?.useSemanticColor ?? false)
+          ? discordColorForRecord(record)
+          : null);
   final embed = <String, Object?>{
     'description': description,
     if (title != null) 'title': _limitDiscord(title, 256),
-    if (options?.color != null) 'color': options!.color,
+    if (color != null) 'color': color,
     if (footer != null) 'footer': {'text': _limitDiscord(footer, 2048)},
     if (options?.includeTimestamp ?? false)
       'timestamp': record.recordedAt.toIso8601String(),

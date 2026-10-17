@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:codekit_ui/src/export/export_confirmation_dialog.dart';
 import 'package:codekit_ui/src/record_details/record_details_screen.dart';
+import 'package:codekit_ui/src/records/diagnostic_record_tile.dart';
 import 'package:codekit_ui/src/records/records_controller.dart';
 import 'package:codekit_ui/src/search_history/search_history_store.dart';
 import 'package:codekit_ui/src/shared/codekit_bottom_sheet.dart';
@@ -587,9 +588,7 @@ void main() {
       expect(reportedConfig?.sanitizedHost, '192.168.1.100');
       expect(reportedConfig?.port, 9090);
 
-      await tester.ensureVisible(
-        find.byKey(const Key('codekit-proxy-toggle')),
-      );
+      await tester.ensureVisible(find.byKey(const Key('codekit-proxy-toggle')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('codekit-proxy-toggle')));
       await tester.pumpAndSettle();
@@ -821,7 +820,8 @@ void main() {
                 onPressed: () => showExportConfirmation(
                   context,
                   selectedCount: 1,
-                  export: (_) async => throw StateError('Simulated export error'),
+                  export: (_) async =>
+                      throw StateError('Simulated export error'),
                 ),
                 child: const Text('Open export'),
               ),
@@ -876,5 +876,175 @@ void main() {
 
     await diagnostics.dispose();
   });
-}
 
+  testWidgets(
+    '3-tier tag hierarchy differentiates HTTP/LOG kind, status/level severity, and duration',
+    (tester) async {
+      final diagnostics = CodeKitDiagnostics();
+      addTearDown(diagnostics.dispose);
+
+      await diagnostics
+          .log(
+            HttpInput(
+              recordId: diagnostics.createRecordId(),
+              requestStartedAt: DateTime.utc(2026),
+              method: 'GET',
+              uri: Uri.parse('https://api.memozen.app/health'),
+              duration: const Duration(milliseconds: 86),
+              response: const HttpResponseSnapshot(statusCode: 200),
+            ),
+          )
+          .persistedOrNull();
+      await diagnostics
+          .log(
+            HttpInput(
+              recordId: diagnostics.createRecordId(),
+              requestStartedAt: DateTime.utc(2026),
+              method: 'GET',
+              uri: Uri.parse('https://api.memozen.app/slow'),
+              duration: const Duration(milliseconds: 3400),
+              response: const HttpResponseSnapshot(statusCode: 200),
+            ),
+          )
+          .persistedOrNull();
+      await diagnostics
+          .log(
+            const LogInput(
+              message: 'Failed to schedule recurring daily EOD',
+              level: LogLevel.warning,
+              tags: {'alarm'},
+            ),
+          )
+          .persistedOrNull();
+      await diagnostics
+          .log(
+            const LogInput(
+              message: 'Reconciled and restored Daily EOD',
+              level: LogLevel.debug,
+            ),
+          )
+          .persistedOrNull();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CodeKitDiagnosticsScreen(
+            diagnostics: diagnostics,
+            viewerSettings: const CodeKitViewerSettings(
+              initialThemeMode: ThemeMode.light,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      BoxDecoration tagDecoration(String text) {
+        final container = tester.widget<Container>(
+          find
+              .ancestor(
+                of: find.text(text).first,
+                matching: find.byType(Container),
+              )
+              .first,
+        );
+        return container.decoration! as BoxDecoration;
+      }
+
+      const lightPalette = CodeKitTagTheme.light();
+      // Tier 2 HTTP vs LOG structural kind tags have distinct backgrounds
+      expect(tagDecoration('HTTP').color, lightPalette.recordHttp.background);
+      expect(tagDecoration('LOG').color, lightPalette.recordLog.background);
+
+      // Tier 1 LogLevel WARNING is colored with warning tone (not neutral gray like DEBUG)
+      expect(tagDecoration('WARNING').color, lightPalette.warning.background);
+      expect(tagDecoration('DEBUG').color, lightPalette.neutral.background);
+      expect(
+        tagDecoration('WARNING').color,
+        isNot(equals(tagDecoration('DEBUG').color)),
+      );
+
+      // Custom log tag renders with # prefix
+      expect(find.text('#alarm'), findsOneWidget);
+
+      // Tier 1 Status 200 and Tier 3 Fast duration (86 ms) do NOT share the same background fill
+      expect(tagDecoration('200').color, lightPalette.success.background);
+      expect(tagDecoration('86 ms').color, lightPalette.neutral.background);
+      expect(
+        tagDecoration('86 ms').color,
+        isNot(equals(tagDecoration('200').color)),
+      );
+
+      // Slow duration (3400 ms) promotes to full danger alert fill
+      expect(tagDecoration('3400 ms').color, lightPalette.danger.background);
+    },
+  );
+
+  testWidgets(
+    'multi-select Contained Row list has no Dividers, zero layout shift on toggle, and preserves dialog theme',
+    (tester) async {
+      final diagnostics = CodeKitDiagnostics();
+      addTearDown(diagnostics.dispose);
+
+      for (final msg in ['row one', 'row two', 'row three']) {
+        await diagnostics.log(LogInput(message: msg)).persistedOrNull();
+      }
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.light(),
+          home: CodeKitDiagnosticsScreen(
+            diagnostics: diagnostics,
+            viewerSettings: const CodeKitViewerSettings(
+              initialThemeMode: ThemeMode.dark,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Records list uses Contained Rows without full-bleed Dividers
+      expect(find.byType(Divider), findsNothing);
+
+      final firstTileFinder = find.byType(DiagnosticRecordTile).first;
+      final secondTileFinder = find.byType(DiagnosticRecordTile).at(1);
+      final sizeBeforeSelection = tester.getSize(firstTileFinder);
+      final secondTopLeftBefore = tester.getTopLeft(secondTileFinder);
+
+      // Long-press first row to enter multi-select mode
+      await tester.longPress(find.text('row three'));
+      await tester.pumpAndSettle();
+
+      // Zero layout shift: tile size and adjacent row position remain identical
+      expect(tester.getSize(firstTileFinder), sizeBeforeSelection);
+      expect(tester.getTopLeft(secondTileFinder), secondTopLeftBefore);
+
+      // Select adjacent second row and verify both have primary border + tonal fill
+      await tester.tap(find.text('row two'));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(secondTileFinder), sizeBeforeSelection);
+
+      Material tileMaterial(Finder tile) => tester.widget<Material>(
+        find.descendant(of: tile, matching: find.byType(Material)).first,
+      );
+
+      final selectedShape =
+          tileMaterial(firstTileFinder).shape! as RoundedRectangleBorder;
+      final unselectedShape =
+          tileMaterial(find.byType(DiagnosticRecordTile).at(2)).shape!
+              as RoundedRectangleBorder;
+      expect(selectedShape.side.width, 1.5);
+      expect(unselectedShape.side.width, 1.5);
+      expect(
+        selectedShape.side.color,
+        isNot(equals(unselectedShape.side.color)),
+      );
+
+      // Opening Delete dialog inside Dark viewer inherits Dark theme despite Light host MaterialApp
+      await tester.tap(find.byTooltip('Delete selected records'));
+      await tester.pumpAndSettle();
+      expect(
+        Theme.of(tester.element(find.text('Delete 2 records?'))).brightness,
+        Brightness.dark,
+      );
+    },
+  );
+}

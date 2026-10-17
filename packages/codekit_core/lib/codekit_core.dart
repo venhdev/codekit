@@ -3,8 +3,10 @@ library;
 
 export 'src/models/codec.dart';
 export 'src/recorder/diagnostics.dart';
+export 'src/recorder/http_curl_formatter.dart';
 export 'src/models/records.dart'
     show
+        DiagnosticTone,
         LogLevel,
         RecordMode,
         BodyCaptureState,
