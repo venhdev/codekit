@@ -82,9 +82,10 @@ Diagnostic sinks (choose independently)
 [ ] Telegram bot
 
 Flutter integrations (choose independently)
-[ ] Floating trigger bubble (CodeKitBubble in MaterialApp.builder)
-[ ] In-app diagnostics viewer screen (CodeKitDiagnosticsScreen)
-    <Trigger point: {appInfo | buildVersion}>
+[ ] Floating trigger bubble overlay (CodeKitBubble in MaterialApp.builder)
+[ ] Secret trigger point (open CodeKitDiagnosticsScreen)
+    <Target widget: {buildVersion | customSecretWidget}>
+    <Access guard: {multiTap | pinPrompt | roleCheck | none}>
 [ ] Flutter framework and root-isolate error capture
 
 Full setup guide and agent prompt (raw Markdown):

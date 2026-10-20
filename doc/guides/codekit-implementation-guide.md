@@ -52,9 +52,10 @@ Diagnostic sinks (choose independently)
 [ ] Telegram bot
 
 Flutter integrations (choose independently)
-[ ] Floating trigger bubble (CodeKitBubble in MaterialApp.builder)
-[ ] In-app diagnostics viewer screen (CodeKitDiagnosticsScreen)
-    <Trigger point: {appInfo | buildVersion}>
+[ ] Floating trigger bubble overlay (CodeKitBubble in MaterialApp.builder)
+[ ] Secret trigger point (open CodeKitDiagnosticsScreen)
+    <Target widget: {buildVersion | customSecretWidget}>
+    <Access guard: {multiTap | pinPrompt | roleCheck | none}>
 [ ] Flutter framework and root-isolate error capture
 ```
 
@@ -65,8 +66,8 @@ Flutter integrations (choose independently)
 | `codekit_core` | Always; it owns records, the recorder, redaction, storage contracts, query/export, sink contracts, and the `DevProxyConfig` model | Pure Dart; no Flutter or HTTP-client dependency |
 | `codekit` | A Dart app wants one convenient import for core plus the colored console sink | It re-exports `codekit_core` and `codekit_console`; it is not a global singleton and does not add the optional adapters |
 | `codekit_console` | Colored diagnostic output is selected | Uses `colored_logger`; ANSI is used when supported, with plain-text fallback on Web |
-| `codekit_dio` | The app sends requests with Dio or needs Dio dev proxy routing | Add Dio separately; exposes `withDiagnostics`, `attachDevProxy`, and `createCodeKitDio` |
-| `codekit_http` | The app sends requests with `package:http` or needs HTTP dev proxy routing | Add `http` separately; exposes wrapper, `createDevProxyHttpClient`, and `createCodeKitHttpClient` |
+| `codekit_dio` | The app sends requests with Dio or needs Dio dev proxy routing | Add Dio separately; exposes `withDiagnostics`, `CodeKitDioInterceptor`, `attachDevProxy`, and `createCodeKitDio` |
+| `codekit_http` | The app sends requests with `package:http` or needs HTTP dev proxy routing | Add `http` separately; exposes `withDiagnostics`, `createDevProxyHttpClient`, and `createCodeKitHttpClient` |
 | `codekit_drift_diagnostic_store` | Records must persist across process restarts | Native SQLite for Android, iOS, and desktop; use memory on Web in this MVP |
 | `codekit_webhook` | Records should be sent to Discord and/or Telegram | Requires network access; credentials must not be embedded in a public client app |
 | `codekit_flutter` | Flutter framework and root-isolate errors should be recorded | Installs process-global handlers explicitly |
@@ -81,8 +82,8 @@ webhook client's outbound requests.
 ## 2. Resolve package dependencies before implementation
 
 All current CodeKit workspace packages declare `publish_to: none`; their
-current versions cannot be installed from pub.dev. The umbrella also has a
-historical `0.0.x` release line, but that is not the current workspace API.
+current versions cannot be installed from pub.dev. Do not invent package versions
+or introduce speculative pub.dev dependencies.
 
 Before modifying dependencies, inspect where the target app lives and which
 source it can consume:
@@ -199,11 +200,11 @@ Constructor options:
 | `pendingRecordLimit` | Persistent write queue limit; defaults to 1000 pending records, excluding the active write. Must be positive. |
 | `onWarning` | Safe warning callback for recorder/storage/sink failures. Callback errors are isolated. |
 
-Retention has no age, byte-size, or background-expiration limit. When the
-record count exceeds the configured limit, old records are removed in batches
-of at least five percent of the limit, rounded up, or by more when necessary
-to get under the limit. For example, at a limit of 100, inserting record 101
-evicts five oldest records, leaving 96.
+Retention is count-only with no age, byte-size, or background-expiration limit;
+oldest records are evicted automatically when `maxRecords` is exceeded.
+Runtime configuration changes can be applied directly via public property setters
+(`diagnostics.recordMode = ...`, `diagnostics.redactionPolicy = ...`, and
+`diagnostics.captureExcludeUriPatterns = [...]`), affecting subsequent records.
 
 ### Log application events
 
@@ -396,15 +397,15 @@ Future<CodeKitDiagnostics> createPersistentDiagnostics() async {
 ```
 
 The factory accepts the same core settings as `CodeKitDiagnostics`, including
-sinks, URI exclusions, warning callback, and pending-write limit. The adapter
+sinks, URI exclusions, warning callbacks (`onWarning` for recorder events and
+`onStoreWarning` for SQLite/decoding warnings), and pending-write limit. The adapter
 creates the parent directory. It stores records and Trace sessions in native
 SQLite, uses explicit schema migrations, and skips malformed persisted rows
-with a warning. Web is not supported by this adapter in the current MVP; use memory
-storage there. The package establishes a Platform Connection Perimeter (stubbing
-native Drift and `dart:ffi` on Web) so consuming applications compile cleanly to
-Flutter Web without compiler errors. The database is not encrypted by CodeKit. Store raw is
-especially sensitive when persistence is enabled; use redaction deliberately
-and apply app-specific file protection/encryption if required.
+with a warning. Web is not supported by Drift in this MVP; use memory
+storage on Web (native SQLite stubs allow Web targets to compile cleanly).
+The database is not encrypted by CodeKit. Store raw is especially sensitive
+when persistence is enabled; use redaction deliberately and apply
+app-specific file protection/encryption if required.
 
 Do not independently close a store passed to `CodeKitDiagnostics`; diagnostics
 owns it and closes it from `dispose()`. A store instance belongs to one
@@ -458,6 +459,7 @@ List<DiagnosticSink> createWebhookSinks({
   if (discordWebhookUrl != null)
     DiscordSink(
       webhookUrl: discordWebhookUrl,
+      options: const DiscordSinkOptions(useSemanticColor: true),
       httpDispatchPolicy: HttpDispatchPolicy(
         statusGroups: {HttpStatusGroup.serverError},
       ),
@@ -552,7 +554,10 @@ handled internally by Dio's adapter remain part of one logical request.
 The interceptor records on response or error, using a private request ID that
 is not sent over the network. It calls Dio's handler onward whether or not
 capture succeeds. It does not close Dio when diagnostics is disposed; the app
-owns the client lifecycle.
+owns the client lifecycle. When an application requires precise positioning
+within an existing interceptor chain (e.g. before/after Auth token refresh),
+instantiate `CodeKitDioInterceptor(diagnostics: diagnostics)` directly and
+add it to `dio.interceptors`.
 
 Dio body behavior:
 
@@ -600,26 +605,12 @@ bodies are absent; binary/unknown types and decode failures are unsupported.
 Malformed JSON with valid UTF-8 is captured as text. Recorder/export redaction
 applies only to the diagnostic snapshot, not the response returned to the app.
 
-send() returns the original StreamedResponse without subscribing to, wrapping
-or consuming its stream. Its one record completes at headers, with body
-unsupported, even if the application never reads the body. Later stream
-errors/cancellation remain on the application stream and do not update the
-record. read()/readBytes() also preserve custom inner overrides: read captures
-returned text; readBytes has no content type and is unsupported. These APIs
-expose no status/headers; diagnostics leave those fields unknown.
-
-Duration stops when the inner method completes, before response snapshot
-processing. Trace membership follows recorder acceptance. Diagnostics have
-snapshot CPU/memory overhead but do not await persistence or sink delivery.
-See the [adapter contract](../specs/http-client-adapters.md#packagehttp)
-for capture boundaries, content types and decoding behavior.
-
-Text/JSON request snapshots and multipart fields/file metadata may be captured;
-multipart file bytes and streamed request bodies are not read. The multipart
-content type is recorded without a boundary added later by request finalization.
-Wrapper order determines whether a retry wrapper exposes each attempt or only
-its final response. Redirects handled inside the underlying client are not
-separate records.
+For `send()`, the original `StreamedResponse` is returned untouched without
+consuming its stream; its record completes at headers with body marked `unsupported`.
+For `read()` and `readBytes()`, returned text is captured while raw bytes are marked
+unsupported. Multipart text fields and file metadata are captured, but file bytes and
+streamed request bodies are never read. Redirects handled inside the client remain a
+single logical record.
 
 ### HTTP capture common behavior
 
@@ -781,7 +772,8 @@ and automatically hidden in Release builds to protect production environments.
 Developers can customize visibility using any boolean condition (e.g. `enabled: kDebugMode`
 for debug-only, `enabled: false` to disable the bubble entirely and rely on a secret trigger
 gesture, or environment/role checks). It is draggable, available across app routes, and
-hidden while its viewer route is open. If the app owns its own navigation entry, use
+hidden while its viewer route is open. In-viewer toggle is supported out of the box from
+the viewer settings sheet. If the app owns its own navigation entry, use
 `CodeKitDiagnosticsScreen` directly and pass the same diagnostics object. The viewer is
 not required for recording, querying, Trace management, or export.
 
@@ -811,69 +803,231 @@ working and not an access-control mechanism.
 
 ### Viewer workflows and interaction behavior
 
-- The records page supports paged loading, text/regex search, filters by type,
-  HTTP status group, duration, and inclusive time range, plus reload and pull
-  to refresh. The filter action indicates when filters are active. Search
-  matches message/source/error for LOG and method/URI/source/error for HTTP; it
-  does not search headers, bodies, or context.
-- Long-pressing a record enters selection mode. Search and filters remain
-  available; selected rows are outlined rather than shown with checkboxes.
-  Search/filter/reload/Trace scope changes preserve selected IDs. One bottom row
-  offers a tri-state checkbox for the loaded list, an expanding Share action
-  opening Confirm Export, and a delete icon confirming the selected count.
-  Selection outside the current list remains selected and is included in
-  export/deletion. Leaving selection clears it. Counts use `x results`, with
-  `+` while more pages remain.
-- HTTP detail has Summary, Request and Response tabs, each independently
-  scrollable. Summary includes the complete URI/query and error. Tabs stay
-  visible with long summaries. Request/Response have collapsible
-  request/response headers (collapsed by default), and body inspection
-  (expanded by default). Copy controls appear only when the corresponding data
-  is available. Record ID, recorded time, and record mode are shown in an
-  information dialog.
-- Trace controls show whether capture is active and the count of accepted IDs.
-  Saved sessions can scope the list, be exported, or be explicitly deleted.
-- Filters, Settings, Trace sessions, and Search history use the same 55%-height
-  draggable, scrollable sheet. Drag down or tap outside to close.
-- Settings offers System (default), Light and Dark viewer themes, independently
-  of the host app theme. `CodeKitViewerSettings.initialThemeMode` selects the
-  initial mode. A bubble retains the runtime choice while it exists; choices
-  are not persisted across restart. Details and modal surfaces share the theme.
-- When dev proxy override is enabled (the default), Settings displays an interactive
-  Dev Proxy card labeled with a prominent `Session override` badge and caption:
-  "Overrides proxy settings for this app session only. Resets when app restarts."
-  Developers can toggle routing on/off and tap "Configure Host & Port" to enter
-  LAN IP, port, or select presets (9090, 8888, 8080). Modifications take effect
-  immediately for the active app session and survive closing/reopening the sheet
-  or bubble, but are discarded when the app restarts.
-- Export asks the user to choose Redacted or As stored. Copy and Share are
-  separate full-width actions; Share can optionally share a temporary `.txt`
-  file on native platforms or download it on Web. The sheets close by drag or
-  tapping outside and have no top-right X action.
+- **Records inspection**: Paged timeline supporting text/regex search, status group, duration, and time range filters. Long-press activates multi-select mode for batch export or deletion.
+- **HTTP detail**: Shows full request/response status, headers, and formatted bodies with one-tap cURL and fragment copy actions.
+- **Trace controls**: Activate session recording, inspect accepted IDs, filter records by Trace session, or export trace data.
+- **Dev proxy session override**: Interactive card allowing LAN host/port selection and preset switching (9090, 8888, 8080) that updates active proxy routing immediately for the current session.
+- **Export**: Generates shareable reports choosing Redacted or As-stored representation via native share sheet or Web download.
+- **Semantic badges**: `codekit_ui` exports `CodeKitTag`, `CodeKitTagTheme`, and `CodeKitTagStyle` for visual consistency in custom developer screens.
 
-Search history is kept in UI memory only and stores the 20 most recent valid,
-submitted searches. It is not persisted in the diagnostics store.
+### Secret trigger point and access guards
 
-Direct navigation is also supported:
+When `Secret trigger point` is selected instead of (or alongside) the floating
+bubble, the app wraps the specified `<Target widget>` (`buildVersion` or
+`customSecretWidget`) with the selected `<Access guard>`.
+
+#### Common navigation helper
+
+Always pass the shared `diagnostics` and `viewerSettings` to ensure dev proxy
+session overrides and setup details remain functional:
 
 ```dart
-Navigator.of(context).push<void>(
-  MaterialPageRoute<void>(
-    builder: (_) => CodeKitDiagnosticsScreen(
-      diagnostics: diagnostics,
-      viewerSettings: const CodeKitViewerSettings(
-        setupDetails: [
-          CodeKitViewerSetupDetail(label: 'Storage', value: 'Drift'),
-        ],
+void openCodeKitViewer(
+  BuildContext context, {
+  required CodeKitDiagnostics diagnostics,
+  CodeKitViewerSettings viewerSettings = const CodeKitViewerSettings(),
+}) {
+  Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (_) => CodeKitDiagnosticsScreen(
+        diagnostics: diagnostics,
+        viewerSettings: viewerSettings,
       ),
     ),
-  ),
-);
+  );
+}
 ```
 
-Use this when the app wants to control the route itself instead of displaying
-the floating bubble. A custom route still uses the same diagnostics object and
-does not take ownership of it.
+#### Guard 1: `multiTap` (10 taps within 4 seconds, silent)
+
+The `multiTap` guard wraps any target widget (e.g. `buildVersion` text or a
+`customSecretWidget`). It remains completely silent (no haptics, vibrations,
+sounds, or popups) until exactly 10 taps occur within 4 seconds:
+
+```dart
+class SecretMultiTapTrigger extends StatefulWidget {
+  const SecretMultiTapTrigger({
+    super.key,
+    required this.diagnostics,
+    this.viewerSettings = const CodeKitViewerSettings(),
+    required this.child,
+    this.tapThreshold = 10,
+    this.timeWindow = const Duration(seconds: 4),
+  });
+
+  final CodeKitDiagnostics diagnostics;
+  final CodeKitViewerSettings viewerSettings;
+  final Widget child;
+  final int tapThreshold;
+  final Duration timeWindow;
+
+  @override
+  State<SecretMultiTapTrigger> createState() => _SecretMultiTapTriggerState();
+}
+
+class _SecretMultiTapTriggerState extends State<SecretMultiTapTrigger> {
+  int _tapCount = 0;
+  DateTime? _windowStart;
+
+  void _onTap() {
+    final now = DateTime.now();
+    if (_windowStart == null ||
+        now.difference(_windowStart!) > widget.timeWindow) {
+      _windowStart = now;
+      _tapCount = 1;
+    } else {
+      _tapCount++;
+      if (_tapCount >= widget.tapThreshold) {
+        _tapCount = 0;
+        _windowStart = null;
+        // Silent: No haptic/sound/popup before this line
+        openCodeKitViewer(
+          context,
+          diagnostics: widget.diagnostics,
+          viewerSettings: widget.viewerSettings,
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: _onTap,
+    child: widget.child,
+  );
+}
+```
+
+#### Guard 2: `pinPrompt` (passcode dialog before navigation)
+
+Prompts for a team passcode before navigating:
+
+```dart
+class SecretPinTrigger extends StatelessWidget {
+  const SecretPinTrigger({
+    super.key,
+    required this.diagnostics,
+    this.viewerSettings = const CodeKitViewerSettings(),
+    required this.expectedPin,
+    required this.child,
+  });
+
+  final CodeKitDiagnostics diagnostics;
+  final CodeKitViewerSettings viewerSettings;
+  final String expectedPin;
+  final Widget child;
+
+  Future<void> _showPinDialog(BuildContext context) async {
+    final controller = TextEditingController();
+    final verified = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Enter Diagnostics Passcode'),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Passcode',
+            hintText: 'Enter team PIN',
+          ),
+          onSubmitted: (val) =>
+              Navigator.of(dialogContext).pop(val == expectedPin),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(
+              dialogContext,
+            ).pop(controller.text == expectedPin),
+            child: const Text('Unlock'),
+          ),
+        ],
+      ),
+    );
+
+    if (verified == true && context.mounted) {
+      openCodeKitViewer(
+        context,
+        diagnostics: diagnostics,
+        viewerSettings: viewerSettings,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: () => _showPinDialog(context),
+    child: child,
+  );
+}
+```
+
+#### Guard 3: `roleCheck` (staff/tester privilege gate)
+
+Evaluates whether the authenticated user has staff or tester privileges:
+
+```dart
+class SecretRoleTrigger extends StatelessWidget {
+  const SecretRoleTrigger({
+    super.key,
+    required this.diagnostics,
+    this.viewerSettings = const CodeKitViewerSettings(),
+    required this.isAuthorized,
+    required this.child,
+    this.onUnauthorized,
+  });
+
+  final CodeKitDiagnostics diagnostics;
+  final CodeKitViewerSettings viewerSettings;
+  final bool isAuthorized;
+  final Widget child;
+  final VoidCallback? onUnauthorized;
+
+  void _onTap(BuildContext context) {
+    if (isAuthorized) {
+      openCodeKitViewer(
+        context,
+        diagnostics: diagnostics,
+        viewerSettings: viewerSettings,
+      );
+    } else {
+      onUnauthorized?.call();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: () => _onTap(context),
+    child: child,
+  );
+}
+```
+
+#### Guard 4: `none` (direct tap entry for DevHub or debug screens)
+
+```dart
+GestureDetector(
+  behavior: HitTestBehavior.opaque,
+  onTap: () => openCodeKitViewer(
+    context,
+    diagnostics: diagnostics,
+    viewerSettings: viewerSettings,
+  ),
+  child: targetWidget, // e.g. buildVersion text or devHub tile
+)
+```
+
+Use these trigger guards when the app wants to control viewer entry itself
+instead of displaying the floating bubble. A custom entrypoint still uses the
+same diagnostics object and does not take ownership of it.
 
 ### Embeddable dev proxy card and dialog
 
@@ -944,6 +1098,15 @@ normal, under 3 seconds as warn, and at least 3 seconds as slow; absent duration
 is unknown. Pass `DurationThresholds` to customize the boundaries. Empty filter
 sets mean unrestricted. Text search is case-insensitive substring matching;
 regex is a separate mode and cannot be set at the same time as `text`.
+
+### Direct record lookup by ID
+
+Look up individual records or batches directly by ID (e.g. for error deep-linking or custom alerts):
+
+```dart
+final DiagnosticRecord? record = await diagnostics.getById('rec-123');
+final List<DiagnosticRecord> batch = await diagnostics.getByIds(['rec-1', 'rec-2']);
+```
 
 ### Manual Trace capture
 
@@ -1123,7 +1286,10 @@ An agent implementing the checked features should follow this sequence:
    Preserve interceptors, retry behavior, client ownership, error propagation,
    and streams.
 6. Install Flutter hooks only after the app's own callbacks are configured.
-   Add the viewer only if selected and pass the same diagnostics object.
+   Add the viewer only if selected, passing the same diagnostics object and
+   viewerSettings: either wrap `MaterialApp.builder` with `CodeKitBubble` (overlay),
+   or wrap the designated target widget (`buildVersion` / `customSecretWidget`)
+   using the selected access guard (`multiTap`, `pinPrompt`, `roleCheck`, or `none`).
 7. Wire all cleanup through the existing lifecycle owner. Stop hooks and close
    app clients; then dispose diagnostics once.
 8. Add focused tests with synthetic secrets and deterministic fake responses.
@@ -1197,59 +1363,30 @@ An agent implementing the checked features should follow this sequence:
 - Confirm webhook secrets do not appear in logs, fixtures, source, or compiled
   public client configuration.
 
-### Workspace verification commands
+### Application verification commands
 
-Run only the checks for changed/selected packages, from the workspace root with
-the repository-pinned SDK. These commands are examples for this workspace; a
-consumer app should also run its own project-level checks.
+Run checks for the host application and changed files using the project-configured SDK:
 
 ```sh
-# Format the changed app/package Dart files.
-.fvm/flutter_sdk/bin/dart format --output=none --set-exit-if-changed packages/codekit_core/lib packages/codekit_core/test
+# Format changed files:
+dart format --output=none --set-exit-if-changed <path-to-changed-files>
 
-# Pure-Dart packages.
+# Static analysis:
+flutter analyze
+
+# Run unit and integration tests:
+flutter test
+```
+
+When integrating CodeKit within this repository's workspace, run analyzer and test commands specifically for the affected packages:
+
+```sh
+# Example for core and UI:
 .fvm/flutter_sdk/bin/dart analyze packages/codekit_core
 .fvm/flutter_sdk/bin/dart test packages/codekit_core/test
-.fvm/flutter_sdk/bin/dart analyze packages/codekit_console
-.fvm/flutter_sdk/bin/dart test packages/codekit_console/test
-.fvm/flutter_sdk/bin/dart analyze packages/codekit_dio
-.fvm/flutter_sdk/bin/dart test packages/codekit_dio/test
-.fvm/flutter_sdk/bin/dart analyze packages/codekit_http
-.fvm/flutter_sdk/bin/dart test packages/codekit_http/test
-.fvm/flutter_sdk/bin/dart analyze packages/codekit_webhook
-.fvm/flutter_sdk/bin/dart test packages/codekit_webhook/test
-.fvm/flutter_sdk/bin/dart analyze packages/codekit
-.fvm/flutter_sdk/bin/dart analyze packages/colored_logger
-.fvm/flutter_sdk/bin/dart test packages/colored_logger/test
-
-# Drift: run tests from the package directory so its native-assets build hook runs.
-.fvm/flutter_sdk/bin/dart analyze packages/codekit_drift_diagnostic_store
-(cd packages/codekit_drift_diagnostic_store && ../../.fvm/flutter_sdk/bin/dart test)
-
-# Flutter packages.
-.fvm/flutter_sdk/bin/flutter analyze packages/codekit_flutter
-.fvm/flutter_sdk/bin/flutter test packages/codekit_flutter/test
 .fvm/flutter_sdk/bin/flutter analyze packages/codekit_ui
 .fvm/flutter_sdk/bin/flutter test packages/codekit_ui/test
-
-# Native export delivery tests, when changing that feature.
-(cd packages/codekit_ui && ../../.fvm/flutter_sdk/bin/flutter test test_native)
 ```
-
-Replace the sample formatter paths with the selected package/app paths that
-changed. Run only commands for packages affected by the implementation.
-
-A Web UI run requires Chrome and must be launched from the UI package directory
-so Flutter resolves that package's local test path:
-
-```sh
-cd packages/codekit_ui
-CHROME_EXECUTABLE=/path/to/chrome ../../.fvm/flutter_sdk/bin/flutter test --platform chrome test
-```
-
-HTTP adapter integration tests use the package suites and do not require a
-production API. Webhook tests must use a fake transport or loopback fixture,
-never real service credentials.
 
 ### Common integration mistakes
 
@@ -1274,15 +1411,16 @@ never real service credentials.
   behavior.
 - Test copy/share/file delivery with platform fakes; device share sheets still
   need native device QA where the app requires it.
-- Verify `CodeKitProxyCard` displays PROXY/DIRECT status, triggers state changes
-  via `onConfigChanged`, and automatically opens `CodeKitProxyDialog` when
-  toggling on with an unconfigured host.
-- Verify `CodeKitProxyDialog` updates port via preset chips (9090, 8888, 8080),
-  validates non-empty host and valid port (1–65535), and invokes `onSave`.
-- Verify the viewer Settings sheet displays the Dev Proxy section with the
-  `Session override` badge and explanatory caption, allows in-place toggle and
-  configuration, updates `onDevProxyConfigChanged`, retains session state across
-  reopening within the running process, and hides cleanly when `enableDevProxyOverride: false`.
+- Secret trigger point verification:
+  - `multiTap`: Verify 9 rapid taps within 4 seconds do not navigate; the 10th tap navigates to `CodeKitDiagnosticsScreen`; tapping pauses longer than 4 seconds reset the counter; ensure execution remains completely silent (no haptic, vibration, or popup) prior to reaching 10 taps.
+  - `pinPrompt`: Verify invalid PIN input displays error/cancels without navigating; correct PIN navigates to `CodeKitDiagnosticsScreen`.
+  - `roleCheck`: Verify unauthorized users cannot trigger navigation; authorized users successfully push the screen.
+  - `none`: Verify single tap triggers immediate navigation.
+  - Verify that `CodeKitDiagnosticsScreen` opened via secret triggers receives `viewerSettings`, preserving active `devProxyProvider` session overrides and `setupDetails`.
+- When dev proxy tooling is selected:
+  - Verify `CodeKitProxyCard` displays PROXY/DIRECT status, triggers state changes via `onConfigChanged`, and automatically opens `CodeKitProxyDialog` when toggling on with an unconfigured host.
+  - Verify `CodeKitProxyDialog` updates port via preset chips (9090, 8888, 8080), validates non-empty host and valid port (1–65535), and invokes `onSave`.
+  - Verify the viewer Settings sheet displays the Dev Proxy section with the `Session override` badge and explanatory caption, allows in-place toggle and configuration, updates `onDevProxyConfigChanged`, retains session state across reopening within the running process, and hides cleanly when `enableDevProxyOverride: false`.
 
 ## 15. Ready-to-use coding-agent prompt
 
@@ -1322,9 +1460,10 @@ Diagnostic sinks (choose independently)
 [ ] Telegram bot
 
 Flutter integrations (choose independently)
-[ ] Floating trigger bubble (CodeKitBubble in MaterialApp.builder)
-[ ] In-app diagnostics viewer screen (CodeKitDiagnosticsScreen)
-    <Trigger point: {appInfo | buildVersion}>
+[ ] Floating trigger bubble overlay (CodeKitBubble in MaterialApp.builder)
+[ ] Secret trigger point (open CodeKitDiagnosticsScreen)
+    <Target widget: {buildVersion | customSecretWidget}>
+    <Access guard: {multiTap | pinPrompt | roleCheck | none}>
 [ ] Flutter framework and root-isolate error capture
 
 Before editing:
@@ -1366,13 +1505,20 @@ Implementation rules:
 - If Flutter hooks are selected, install after the app's own callbacks and
   dispose without overwriting callbacks another library installed later.
 - If Flutter UI is selected:
-  - If `Floating trigger bubble` is checked: wrap the app in `MaterialApp.builder`
+  - If `Floating trigger bubble overlay` is checked: wrap the app in `MaterialApp.builder`
     using `CodeKitBubble` with the app's `navigatorKey`. `enabled` defaults to
-    `!kReleaseMode` to protect production releases automatically.
-  - If `In-app diagnostics viewer screen` is checked with `<Trigger point>`: locate
-    the target widget in the app (e.g. app version text in Settings/About) and wrap
-    it with a secret gesture (e.g. 5 taps in 2 seconds) that pushes
-    `CodeKitDiagnosticsScreen(diagnostics: diagnostics)`.
+    `!kReleaseMode` to protect production releases automatically. In-viewer toggle
+    is supported out of the box.
+  - If `Secret trigger point` is checked with `<Target widget>` and `<Access guard>`:
+    locate the target widget in the app (e.g. `buildVersion` text in Settings/About,
+    or a `customSecretWidget`) and protect the entrypoint using the specified guard:
+    - `multiTap`: Require 10 taps within 4 seconds, completely silent (no haptic,
+      vibration, or popup until the threshold is reached).
+    - `pinPrompt`: Show a prompt dialog requiring a team passcode before navigating.
+    - `roleCheck`: Verify whether the authenticated user has staff/admin/tester privileges.
+    - `none`: Navigate directly on tap.
+    On successful verification, push `CodeKitDiagnosticsScreen(diagnostics: diagnostics, viewerSettings: viewerSettings)`
+    to preserve active dev proxy overrides and setup details.
   - Make record-mode switching opt-in; policy and setup details remain read-only
     in the viewer.
 - Wire ownership and cleanup into the existing lifecycle. Close app clients
