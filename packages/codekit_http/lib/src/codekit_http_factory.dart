@@ -11,6 +11,7 @@ http.Client createCodeKitHttpClient({
   CodeKitDiagnostics? diagnostics,
   DevProxyConfig Function()? proxyProvider,
   DevProxyHttpOptions devProxyOptions = const DevProxyHttpOptions(),
+  int? maxBodyCaptureBytes,
 }) {
   http.Client client = proxyProvider != null
       ? createDevProxyHttpClient(
@@ -20,7 +21,10 @@ http.Client createCodeKitHttpClient({
       : http.Client();
 
   if (diagnostics != null) {
-    client = client.withDiagnostics(diagnostics);
+    client = client.withDiagnostics(
+      diagnostics,
+      maxBodyCaptureBytes: maxBodyCaptureBytes,
+    );
   }
 
   return client;

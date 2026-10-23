@@ -534,7 +534,10 @@ import 'package:codekit_dio/codekit_dio.dart';
 import 'package:dio/dio.dart';
 
 final Dio appDio = createConfiguredDio(); // Existing interceptors/adapters.
-final Dio observedDio = appDio.withDiagnostics(diagnostics);
+final Dio observedDio = appDio.withDiagnostics(
+  diagnostics,
+  maxBodyCaptureBytes: 1024 * 1024, // Optional payload capture limit (default: null = capture all).
+);
 
 try {
   final response = await observedDio.get<Map<String, Object?>>('/profile');
@@ -556,7 +559,7 @@ is not sent over the network. It calls Dio's handler onward whether or not
 capture succeeds. It does not close Dio when diagnostics is disposed; the app
 owns the client lifecycle. When an application requires precise positioning
 within an existing interceptor chain (e.g. before/after Auth token refresh),
-instantiate `CodeKitDioInterceptor(diagnostics: diagnostics)` directly and
+instantiate `CodeKitDioInterceptor(diagnostics: diagnostics, maxBodyCaptureBytes: limit)` directly and
 add it to `dio.interceptors`.
 
 Dio body behavior:
@@ -566,6 +569,7 @@ Dio body behavior:
 | `String` | Text |
 | JSON-compatible `Map`, `List`, number, or boolean | JSON snapshot |
 | `FormData` | Text fields plus file metadata; file bytes are not read |
+| Byte size exceeding `maxBodyCaptureBytes` | Overflow metadata (state: `overflow`, retains `sizeBytes` and `contentType`; body data omitted) |
 | `Uint8List`, stream, or other unsupported object | Unsupported body |
 | Response configured as stream | Unsupported response body; stream remains untouched |
 | No body | Absent |
@@ -578,7 +582,10 @@ import 'package:codekit_http/codekit_http.dart';
 import 'package:http/http.dart' as http;
 
 final http.Client configuredClient = createConfiguredHttpClient();
-final http.Client observedClient = configuredClient.withDiagnostics(diagnostics);
+final http.Client observedClient = configuredClient.withDiagnostics(
+  diagnostics,
+  maxBodyCaptureBytes: 1024 * 1024, // Optional payload capture limit (default: null = capture all).
+);
 
 try {
   final response = await observedClient.get(
@@ -600,17 +607,19 @@ diagnostics instance adds one.
 The wrapper forwards each head/get/post/put/patch/delete call to that exact
 method on the inner client with the original parameters. It snapshots the
 already-buffered Response and returns the same instance, including custom
-subclasses. JSON/text capture has no size limit or truncation. Empty buffered
-bodies are absent; binary/unknown types and decode failures are unsupported.
-Malformed JSON with valid UTF-8 is captured as text. Recorder/export redaction
+subclasses. JSON/text capture defaults to no size limit or truncation. If `maxBodyCaptureBytes`
+is configured and the body size exceeds the limit, the body state transitions to
+`BodyCaptureState.overflow` with `{sizeBytes, contentType}` metadata while omitting
+payload data. Empty buffered bodies are absent; binary/unknown types and decode failures
+are unsupported. Malformed JSON with valid UTF-8 is captured as text. Recorder/export redaction
 applies only to the diagnostic snapshot, not the response returned to the app.
 
 For `send()`, the original `StreamedResponse` is returned untouched without
 consuming its stream; its record completes at headers with body marked `unsupported`.
-For `read()` and `readBytes()`, returned text is captured while raw bytes are marked
-unsupported. Multipart text fields and file metadata are captured, but file bytes and
-streamed request bodies are never read. Redirects handled inside the client remain a
-single logical record.
+For `read()` and `readBytes()`, returned text is captured (subject to `maxBodyCaptureBytes`)
+while raw bytes are marked unsupported. Multipart text fields and file metadata are captured,
+but file bytes and streamed request bodies are never read. Redirects handled inside the client
+remain a single logical record.
 
 ### HTTP capture common behavior
 
@@ -621,9 +630,11 @@ single logical record.
 - Duration is measured by the adapter: Dio streams and package:http send()
   end at headers; buffered package:http calls end when the inner method
   completes. Trace membership follows acceptance after snapshot preparation.
-- Body states distinguish `absent`, `captured`, `disabled`, and `unsupported`.
-  Unsupported means the client could not make a supported non-invasive
-  snapshot; it is not an empty body.
+- Body states distinguish `absent`, `captured`, `disabled`, `unsupported`, and `overflow`.
+  `overflow` indicates payload byte size exceeded `maxBodyCaptureBytes`. The payload contents
+  are omitted while retaining `sizeBytes` and optional `contentType` metadata. Because no
+  partial truncation occurs, this avoids malformed JSON syntax and guarantees zero data leaks
+  when combined with `RedactionPolicy`.
 - File metadata can include name, content type, size, and possibly local path
   depending on the producer. Treat paths and metadata as sensitive too.
 
@@ -672,6 +683,7 @@ For standard applications, turnkey factories provide one-stop initialization com
 final dio = createCodeKitDio(
   options: BaseOptions(baseUrl: 'https://api.example.com'),
   diagnostics: diagnostics,
+  maxBodyCaptureBytes: 1024 * 1024, // Optional payload capture limit (default: null)
   proxyProvider: () => devProxyState,
   devProxyOptions: DevProxyDioOptions(
     allowBadCertificates: true,
@@ -684,6 +696,7 @@ final dio = createCodeKitDio(
 // Turnkey package:http client:
 final httpClient = createCodeKitHttpClient(
   diagnostics: diagnostics,
+  maxBodyCaptureBytes: 1024 * 1024, // Optional payload capture limit (default: null)
   proxyProvider: () => devProxyState,
   devProxyOptions: const DevProxyHttpOptions.permissiveDebug(),
 );
@@ -803,8 +816,9 @@ working and not an access-control mechanism.
 
 ### Viewer workflows and interaction behavior
 
-- **Records inspection**: Paged timeline supporting text/regex search, status group, duration, and time range filters. Long-press activates multi-select mode for batch export or deletion.
-- **HTTP detail**: Shows full request/response status, headers, and formatted bodies with one-tap cURL and fragment copy actions.
+- **Records inspection**: Paged timeline supporting text/regex search, status group, duration, and time range filters. Long-press activates multi-select mode for batch export or deletion. Timeline queries automatically load lightweight summary records (omitting large bodies and headers), guaranteeing smooth scrolling and instant searching even across hundreds of records.
+- **HTTP detail**: Shows full request/response status, headers, and formatted bodies with one-tap cURL and fragment copy actions. Complete record payload is loaded lazily on demand via `diagnostics.getById()`.
+- **Large payload safeguards**: Bodies exceeding client `maxBodyCaptureBytes` display an overflow notice with byte size. Bodies exceeding 100 KB show a 100 KB preview with a notice banner, preventing unvirtualized `SelectableText` UI layout freeze while preserving full copy via "Copy body".
 - **Trace controls**: Activate session recording, inspect accepted IDs, filter records by Trace session, or export trace data.
 - **Dev proxy session override**: Interactive card allowing LAN host/port selection and preset switching (9090, 8888, 8080) that updates active proxy routing immediately for the current session.
 - **Export**: Generates shareable reports choosing Redacted or As-stored representation via native share sheet or Web download.
@@ -1395,7 +1409,9 @@ When integrating CodeKit within this repository's workspace, run analyzer and te
 | No HTTP records | The request used a different client, code still uses the original `package:http` client instead of the wrapper, or the URI matches an exclusion. |
 | No webhook delivery | The sink's relevant `httpDispatchPolicy` or `logDispatchPolicy` is null, its policy excludes the record, or it is busy/cooling down. Configure explicit policies and inspect safe warnings. |
 | Record is accepted but not in a persistent query yet | The write is still pending. Await that receipt's `persistedOrNull()` if the flow needs confirmation; do not assume pending records are queryable. |
-| Body says unsupported | Streamed responses from Dio or package:http send(), binary/unknown content types, decode failures, and readBytes() without a media type remain unsupported. Supported buffered JSON/text has no size limit. Never read ahead or drain a response to improve diagnostics. |
+| Body says unsupported | Streamed responses from Dio or package:http send(), binary/unknown content types, decode failures, and readBytes() without a media type remain unsupported. Supported buffered JSON/text has no size limit by default. Never read ahead or drain a response to improve diagnostics. |
+| Body says overflow | Payload byte size exceeded configured `maxBodyCaptureBytes`. The payload data was omitted to conserve memory and preserve RedactionPolicy safety. Increase or remove `maxBodyCaptureBytes` if complete payload capture is required for this client. |
+| Viewer lag on massive payloads | Timeline scan and search query now use lightweight summaries automatically. For clients producing multi-megabyte payloads, configure `maxBodyCaptureBytes` (e.g. 1 MB or 2 MB) on the client adapter to prevent storing massive bodies. |
 | As-stored export still shows `[REDACTED]` | The record was redacted before it was stored. Removed values cannot be restored. |
 | Bubble is absent in release | `enabled` defaults to `!kReleaseMode`, automatically hiding the bubble in release builds to protect production users. Pass `enabled: true` or a custom condition if release visibility is explicitly intended. |
 | Records disappear after restart | Memory storage is process-local. Select Drift on a supported native platform and provide a stable application-owned path. |

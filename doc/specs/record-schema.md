@@ -57,6 +57,7 @@ Text containing valid JSON can be parsed transiently for field redaction and ins
 | `captured` | A supported representation was captured. |
 | `disabled` | Capture was disabled by configuration. |
 | `unsupported` | The adapter could not capture a supported representation. |
+| `overflow` | The payload exceeded the client adapter's `maxBodyCaptureBytes` limit; payload content is omitted while preserving metadata (`sizeBytes`, optional `contentType`). |
 
 File metadata is captured content, not an unsupported-state error. Media/file bytes are excluded according to the lifecycle. Capture state is separate from record mode and is not a redacted/safe flag.
 
@@ -68,4 +69,4 @@ File metadata is captured content, not an unsupported-state error. Media/file by
 
 Envelope fields are schemaVersion (integer 1), id (string), recordedAt (UTC ISO8601), recordMode (redactBeforeRecording/storeRaw), optional source/context, and payload. Log payload fields are type=log, message, level (trace/debug/info/warning/error/fatal), optional tags/error/stackTrace. HTTP payload fields are type=http, requestStartedAt, method, uri, optional durationMicros/requestHeaders/requestBody/response/error. Response fields are optional statusCode/headers/body. Error fields are type/message and optional stackTrace.
 
-Body fields are state (absent/captured/disabled/unsupported), representation (text/json/media only when captured), and data (required when captured, including explicit JSON null). Media data is a list of MediaFileMetadata objects with optional fileName/contentType/sizeBytes/path. This typed representation has no byte payload field. Unknown optional wire fields may be ignored; missing required fields and invalid enums/types produce invalid decode results. Schema version is checked by DiagnosticRecordCodec before decoding.
+Body fields are state (absent/captured/disabled/unsupported/overflow), representation (text/json/media only when captured), and data (required when captured, including explicit JSON null; optional map containing sizeBytes and contentType when in overflow state). Media data is a list of MediaFileMetadata objects with optional fileName/contentType/sizeBytes/path. This typed representation has no byte payload field. Unknown optional wire fields may be ignored; missing required fields and invalid enums/types produce invalid decode results. Schema version is checked by DiagnosticRecordCodec before decoding.

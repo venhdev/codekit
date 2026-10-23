@@ -6,7 +6,15 @@ import '../models/records.dart';
 
 enum StorageKind { memory, persistent }
 
-enum DiagnosticRecordType { log, http }
+enum DiagnosticRecordType {
+  log,
+  http;
+
+  String get label => switch (this) {
+    log => 'App log',
+    http => 'HTTP record',
+  };
+}
 
 enum DurationLevel {
   fast,
@@ -21,6 +29,14 @@ enum DurationLevel {
     warn => DiagnosticTone.warning,
     slow => DiagnosticTone.danger,
     unknown => DiagnosticTone.neutral,
+  };
+
+  String get label => switch (this) {
+    fast => 'Fast',
+    normal => 'Normal',
+    warn => 'Warn',
+    slow => 'Slow',
+    unknown => 'None',
   };
 
   bool get isPromotedAlert => this == warn || this == slow;

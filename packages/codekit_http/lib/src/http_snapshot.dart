@@ -3,8 +3,11 @@ import 'dart:convert';
 import 'package:codekit_core/codekit_core.dart';
 import 'package:http/http.dart' as http;
 
-/// Snapshots only an already buffered response, with no size limit.
-BodySnapshot snapshotResponseBody(http.Response response) {
+/// Snapshots only an already buffered response, subject to optional [maxBodyCaptureBytes].
+BodySnapshot snapshotResponseBody(
+  http.Response response, {
+  int? maxBodyCaptureBytes,
+}) {
   final bytes = response.bodyBytes;
   if (bytes.isEmpty) return const BodySnapshot.absent();
   final type =
@@ -18,6 +21,9 @@ BodySnapshot snapshotResponseBody(http.Response response) {
       type != 'application/xml' &&
       !type.endsWith('+xml')) {
     return const BodySnapshot.unsupported();
+  }
+  if (maxBodyCaptureBytes != null && bytes.length > maxBodyCaptureBytes) {
+    return BodySnapshot.oversized(bytes.length, type);
   }
   try {
     final text = isJson ? utf8.decode(bytes) : response.body;
@@ -44,7 +50,10 @@ Map<String, List<String>> snapshotRequestHeaders(http.BaseRequest request) {
   return headers;
 }
 
-BodySnapshot snapshotRequestBody(http.BaseRequest request) {
+BodySnapshot snapshotRequestBody(
+  http.BaseRequest request, {
+  int? maxBodyCaptureBytes,
+}) {
   if (request is http.MultipartRequest) {
     final files = request.files
         .map(
@@ -68,6 +77,10 @@ BodySnapshot snapshotRequestBody(http.BaseRequest request) {
   final contentType = contentTypeHeader?.split(';').first.trim().toLowerCase();
   if (contentType == 'application/x-www-form-urlencoded') {
     return BodySnapshot.json(request.bodyFields);
+  }
+  if (maxBodyCaptureBytes != null &&
+      request.bodyBytes.length > maxBodyCaptureBytes) {
+    return BodySnapshot.oversized(request.bodyBytes.length, contentType);
   }
   final isJson =
       contentType == 'application/json' ||

@@ -9,10 +9,15 @@ import 'http_snapshot.dart';
 /// Records available HTTP snapshots while the inner client owns networking.
 /// Buffered methods preserve the original Response; send preserves its stream.
 class CodeKitHttpClient extends http.BaseClient {
-  CodeKitHttpClient(this._inner, {required this.diagnostics});
+  CodeKitHttpClient(
+    this._inner, {
+    required this.diagnostics,
+    this.maxBodyCaptureBytes,
+  });
 
   final http.Client _inner;
   final CodeKitDiagnostics diagnostics;
+  final int? maxBodyCaptureBytes;
   bool _closed = false;
 
   bool _containsDiagnostics(CodeKitDiagnostics value) =>
@@ -146,7 +151,10 @@ class CodeKitHttpClient extends http.BaseClient {
         final preview =
             request ?? _preview(method, url, headers, body, encoding);
         capturedHeaders = snapshotRequestHeaders(preview);
-        capturedRequest = snapshotRequestBody(preview).detached();
+        capturedRequest = snapshotRequestBody(
+          preview,
+          maxBodyCaptureBytes: maxBodyCaptureBytes,
+        ).detached();
       }
     } catch (_) {
       // A custom inner client may accept inputs standard http.Request rejects.
@@ -162,7 +170,10 @@ class CodeKitHttpClient extends http.BaseClient {
           response = HttpResponseSnapshot(
             statusCode: result.statusCode,
             headers: result.headersSplitValues,
-            body: snapshotResponseBody(result),
+            body: snapshotResponseBody(
+              result,
+              maxBodyCaptureBytes: maxBodyCaptureBytes,
+            ),
           );
         } else if (result is http.StreamedResponse) {
           response = HttpResponseSnapshot(
@@ -172,7 +183,14 @@ class CodeKitHttpClient extends http.BaseClient {
           );
         } else if (result is String) {
           // read() hides status/headers; don't fabricate either field.
-          response = HttpResponseSnapshot(body: BodySnapshot.text(result));
+          final bytesLength = utf8.encode(result).length;
+          response = HttpResponseSnapshot(
+            body:
+                (maxBodyCaptureBytes != null &&
+                    bytesLength > maxBodyCaptureBytes!)
+                ? BodySnapshot.oversized(bytesLength, 'text/plain')
+                : BodySnapshot.text(result),
+          );
         } else if (result is Uint8List) {
           // readBytes() provides no media type; bytes remain unsupported.
           response = const HttpResponseSnapshot(
@@ -248,11 +266,18 @@ class CodeKitHttpClient extends http.BaseClient {
 
 extension HttpClientDiagnosticsExtension on http.Client {
   /// Wraps this client with diagnostics and returns the client to use.
-  CodeKitHttpClient withDiagnostics(CodeKitDiagnostics diagnostics) {
+  CodeKitHttpClient withDiagnostics(
+    CodeKitDiagnostics diagnostics, {
+    int? maxBodyCaptureBytes,
+  }) {
     if (this is CodeKitHttpClient) {
       final current = this as CodeKitHttpClient;
       if (current._containsDiagnostics(diagnostics)) return current;
     }
-    return CodeKitHttpClient(this, diagnostics: diagnostics);
+    return CodeKitHttpClient(
+      this,
+      diagnostics: diagnostics,
+      maxBodyCaptureBytes: maxBodyCaptureBytes,
+    );
   }
 }

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:math';
 
@@ -8,7 +7,9 @@ import '../models/records.dart';
 import '../redaction/redaction.dart';
 import '../sinks/sinks.dart';
 import '../storage/storage.dart';
-import 'http_curl_formatter.dart';
+import 'diagnostic_exporter.dart';
+
+export 'diagnostic_exporter.dart';
 
 enum RecordDropReason {
   excluded,
@@ -48,25 +49,6 @@ class _Write {
   _Write(this.record, this.receipt);
 }
 
-enum ExportRepresentation { redacted, asStored }
-
-enum ExportStatus { success, empty, failed }
-
-enum HttpFragment { body, headers, curl }
-
-class ExportResult {
-  final ExportStatus status;
-  final String? text;
-  final int recordCount;
-  final String? error;
-  const ExportResult._(this.status, this.text, this.recordCount, this.error);
-  const ExportResult.empty() : this._(ExportStatus.empty, null, 0, null);
-  const ExportResult.failed(String error)
-    : this._(ExportStatus.failed, null, 0, error);
-  const ExportResult.success(String text, int count)
-    : this._(ExportStatus.success, text, count, null);
-}
-
 /// Explicit diagnostics instance owning one store and its configured sinks.
 class CodeKitDiagnostics {
   final DiagnosticStore _store;
@@ -75,6 +57,7 @@ class CodeKitDiagnostics {
   final int pendingRecordLimit;
   final DateTime Function() _clock;
   final void Function(DiagnosticWarning)? _onWarning;
+  late final DiagnosticExporter _exporter;
   final _pending = Queue<_Write>();
   final _random = Random.secure();
   int _idSequence = 0;
@@ -113,6 +96,7 @@ class CodeKitDiagnostics {
     if (this.pendingRecordLimit < 1) {
       throw ArgumentError('Pending limit must be positive');
     }
+    _exporter = DiagnosticExporter(store: _store, onWarning: _warn);
   }
   RecordMode get recordMode => _recordMode;
   bool get isTraceActive => _traceIds != null;
@@ -408,49 +392,25 @@ class CodeKitDiagnostics {
   Future<ExportResult> exportTraceSession(
     String id, {
     ExportRepresentation representation = ExportRepresentation.redacted,
-  }) async {
-    final policy = _redactionPolicy;
-    try {
-      _checkOpen();
-      final sessions = await _store.listTraceSessions();
-      final session = sessions.where((s) => s.id == id).firstOrNull;
-      if (session == null) return const ExportResult.empty();
-      return await _exportRecords(session.recordIds, representation, policy);
-    } catch (_) {
-      return const ExportResult.failed('Trace query failed');
-    }
+  }) {
+    _checkOpen();
+    return _exporter.exportTraceSession(
+      id,
+      representation: representation,
+      policy: _redactionPolicy,
+    );
   }
 
   Future<ExportResult> exportRecords(
     List<String> ids, {
     ExportRepresentation representation = ExportRepresentation.redacted,
-  }) =>
-      _exportRecords(List.unmodifiable(ids), representation, _redactionPolicy);
-
-  Future<ExportResult> _exportRecords(
-    List<String> ids,
-    ExportRepresentation representation,
-    RedactionPolicy policy,
-  ) async {
-    try {
-      _checkOpen();
-      final records = await _store.getByIds(ids);
-      if (records.isEmpty) return const ExportResult.empty();
-      final copies = records
-          .map(
-            (r) => representation == ExportRepresentation.redacted
-                ? policy.apply(r)
-                : r,
-          )
-          .toList();
-      final text = copies
-          .map((r) => const JsonEncoder.withIndent('  ').convert(r.toJson()))
-          .join('\n\n');
-      return ExportResult.success(text, copies.length);
-    } catch (_) {
-      _warn('exportFailed', 'Export failed');
-      return const ExportResult.failed('Query or redaction failed');
-    }
+  }) {
+    _checkOpen();
+    return _exporter.exportRecords(
+      List.unmodifiable(ids),
+      representation: representation,
+      policy: _redactionPolicy,
+    );
   }
 
   Future<ExportResult> formatHttpFragment(
@@ -458,60 +418,15 @@ class CodeKitDiagnostics {
     HttpFragment fragment, {
     ExportRepresentation representation = ExportRepresentation.redacted,
     HeaderTarget target = HeaderTarget.both,
-  }) async {
-    final policy = _redactionPolicy;
-    try {
-      _checkOpen();
-      var record = await _store.getById(id);
-      if (record == null) return const ExportResult.empty();
-      if (representation == ExportRepresentation.redacted) {
-        record = policy.apply(record);
-      }
-      final p = record.payload;
-      if (p is! HttpPayload) {
-        return const ExportResult.failed('Not an HTTP record');
-      }
-      String encode(Object? value) => value is String
-          ? value
-          : const JsonEncoder.withIndent('  ').convert(value);
-      final String text;
-      switch (fragment) {
-        case HttpFragment.headers:
-          text = encode({
-            if (target.includesRequest) 'request': p.requestHeaders,
-            if (target.includesResponse) 'response': p.response?.headers,
-          });
-        case HttpFragment.body:
-          String bodyText(BodySnapshot? body) =>
-              body?.state == BodyCaptureState.captured
-              ? encode(body!.data)
-              : '[Body ${body?.state.name ?? 'absent'}]';
-          if (target == HeaderTarget.request) {
-            text = bodyText(p.requestBody);
-          } else if (target == HeaderTarget.response) {
-            text = bodyText(p.response?.body);
-          } else {
-            text =
-                'Request body:\n${bodyText(p.requestBody)}\n\nResponse body:\n${bodyText(p.response?.body)}';
-          }
-        case HttpFragment.curl:
-          final body = p.requestBody;
-          final unreplayableBody =
-              body != null &&
-              body.state != BodyCaptureState.absent &&
-              (body.state != BodyCaptureState.captured ||
-                  body.representation == BodyRepresentation.media);
-          final incomplete =
-              record.recordMode == RecordMode.redactBeforeRecording ||
-              representation == ExportRepresentation.redacted ||
-              unreplayableBody;
-          text =
-              '${incomplete ? '# Diagnostic representation; replay may be incomplete\n' : ''}${formatHttpCurl(p)}';
-      }
-      return ExportResult.success(text, 1);
-    } catch (_) {
-      return const ExportResult.failed('Fragment formatting failed');
-    }
+  }) {
+    _checkOpen();
+    return _exporter.formatHttpFragment(
+      id,
+      fragment,
+      representation: representation,
+      policy: _redactionPolicy,
+      target: target,
+    );
   }
 
   Future<void> dispose() {

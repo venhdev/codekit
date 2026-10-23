@@ -884,6 +884,109 @@ void main() {
     expect(DurationLevel.unknown.isPromotedAlert, isFalse);
     expect(DurationLevel.warn.isPromotedAlert, isTrue);
     expect(DurationLevel.slow.isPromotedAlert, isTrue);
+
+    expect(HttpStatusGroup.informational.label, '1xx');
+    expect(HttpStatusGroup.success.label, '2xx');
+    expect(HttpStatusGroup.redirection.label, '3xx');
+    expect(HttpStatusGroup.clientError.label, '4xx');
+    expect(HttpStatusGroup.serverError.label, '5xx');
+    expect(HttpStatusGroup.unknown.label, 'Unknown');
+
+    expect(DurationLevel.fast.label, 'Fast');
+    expect(DurationLevel.normal.label, 'Normal');
+    expect(DurationLevel.warn.label, 'Warn');
+    expect(DurationLevel.slow.label, 'Slow');
+    expect(DurationLevel.unknown.label, 'None');
+
+    expect(DiagnosticRecordType.log.label, 'App log');
+    expect(DiagnosticRecordType.http.label, 'HTTP record');
+  });
+  test('BodySnapshot.overflow and oversized serialize, deserialize, detach and preserve metadata', () {
+    final overflow = BodySnapshot.overflow(
+      sizeBytes: 2048,
+      contentType: 'application/json',
+    );
+    expect(overflow.state, BodyCaptureState.overflow);
+    expect(overflow.representation, isNull);
+    expect(overflow.data, {
+      'sizeBytes': 2048,
+      'contentType': 'application/json',
+    });
+
+    final detached = overflow.detached();
+    expect(detached.state, BodyCaptureState.overflow);
+    expect(detached.data, {
+      'sizeBytes': 2048,
+      'contentType': 'application/json',
+    });
+
+    final json = overflow.toJson();
+    expect(json, {
+      'state': 'overflow',
+      'data': {'sizeBytes': 2048, 'contentType': 'application/json'},
+    });
+
+    final restored = BodySnapshot.fromJson(json);
+    expect(restored.state, BodyCaptureState.overflow);
+    expect(restored.data, {
+      'sizeBytes': 2048,
+      'contentType': 'application/json',
+    });
+
+    final oversized = BodySnapshot.oversized(100000);
+    expect(oversized.state, BodyCaptureState.overflow);
+    expect(oversized.data, {'sizeBytes': 100000});
+  });
+  test('DiagnosticRecordCodec decode summaryOnly: true omits headers, context and bodies for fast scan', () {
+    final d = DiagnosticRecord(
+      id: 'summary-test',
+      recordedAt: DateTime.utc(2026, 1, 1),
+      recordMode: RecordMode.storeRaw,
+      source: 'test-suite',
+      context: {'heavyMeta': 'deep-tree'},
+      payload: HttpPayload(
+        requestStartedAt: DateTime.utc(2026, 1, 1),
+        method: 'POST',
+        uri: Uri.parse('https://example.com/api/data'),
+        duration: const Duration(milliseconds: 150),
+        requestHeaders: {
+          'x-custom': ['123'],
+        },
+        requestBody: const BodySnapshot.text('very large request body'),
+        response: HttpResponseSnapshot(
+          statusCode: 200,
+          headers: {
+            'content-type': ['application/json'],
+          },
+          body: const BodySnapshot.text('very large response body'),
+        ),
+      ),
+    );
+
+    const codec = DiagnosticRecordCodec();
+    final bytes = codec.encode(d);
+
+    final summaryResult = codec.decode(bytes, summaryOnly: true);
+    expect(summaryResult.status, RecordDecodeStatus.success);
+    final summaryRecord = summaryResult.record!;
+    expect(summaryRecord.id, 'summary-test');
+    expect(summaryRecord.context, isNull);
+    final httpPayload = summaryRecord.payload as HttpPayload;
+    expect(httpPayload.method, 'POST');
+    expect(httpPayload.uri.toString(), 'https://example.com/api/data');
+    expect(httpPayload.duration?.inMilliseconds, 150);
+    expect(httpPayload.requestHeaders, isNull);
+    expect(httpPayload.requestBody, isNull);
+    expect(httpPayload.response?.statusCode, 200);
+    expect(httpPayload.response?.headers, isNull);
+    expect(httpPayload.response?.body, isNull);
+
+    final fullResult = codec.decode(bytes, summaryOnly: false);
+    expect(fullResult.record!.context, {'heavyMeta': 'deep-tree'});
+    final fullPayload = fullResult.record!.payload as HttpPayload;
+    expect(fullPayload.requestHeaders, isNotNull);
+    expect(fullPayload.requestBody?.state, BodyCaptureState.captured);
+    expect(fullPayload.response?.body?.state, BodyCaptureState.captured);
   });
 }
 

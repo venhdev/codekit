@@ -12,7 +12,8 @@ class RecordsController extends ChangeNotifier {
   RecordsController(this.diagnostics, this.history);
 
   List<DiagnosticRecord> records = const [];
-  final Set<String> selectedIds = {};
+  final Set<String> _selectedIds = {};
+  Set<String> get selectedIds => Set.unmodifiable(_selectedIds);
   Set<HttpStatusGroup> statusGroups = {};
   Set<DurationLevel> durationLevels = {};
   Set<DiagnosticRecordType> types = {};
@@ -33,7 +34,7 @@ class RecordsController extends ChangeNotifier {
   /// Checkbox state reflects only IDs in the currently loaded list.
   bool? get visibleSelection {
     final count = records
-        .where((record) => selectedIds.contains(record.id))
+        .where((record) => _selectedIds.contains(record.id))
         .length;
     if (count == 0) return false;
     return count == records.length ? true : null;
@@ -163,13 +164,13 @@ class RecordsController extends ChangeNotifier {
   }
 
   void toggleSelected(String id) {
-    if (!selectedIds.add(id)) selectedIds.remove(id);
+    if (!_selectedIds.add(id)) _selectedIds.remove(id);
     notifyListeners();
   }
 
   void clearSelection() {
-    if (selectedIds.isEmpty) return;
-    selectedIds.clear();
+    if (_selectedIds.isEmpty) return;
+    _selectedIds.clear();
     notifyListeners();
   }
 
@@ -187,15 +188,15 @@ class RecordsController extends ChangeNotifier {
   void toggleVisibleSelection() {
     final ids = records.map((record) => record.id);
     if (visibleSelection == true) {
-      selectedIds.removeAll(ids);
+      _selectedIds.removeAll(ids);
     } else {
-      selectedIds.addAll(ids);
+      _selectedIds.addAll(ids);
     }
     notifyListeners();
   }
 
   void removeSelected(Iterable<String> ids) {
-    selectedIds.removeAll(ids);
+    _selectedIds.removeAll(ids);
     notifyListeners();
   }
 }

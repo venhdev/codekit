@@ -6,8 +6,9 @@ import 'package:flutter/material.dart';
 import '../export/http_fragment_copy_dialog.dart';
 import '../shared/codekit_bottom_sheet.dart';
 import '../shared/codekit_tag.dart';
+import 'body_inspector.dart';
 
-class RecordDetailsScreen extends StatelessWidget {
+class RecordDetailsScreen extends StatefulWidget {
   const RecordDetailsScreen({
     super.key,
     required this.diagnostics,
@@ -18,7 +19,28 @@ class RecordDetailsScreen extends StatelessWidget {
   final DiagnosticRecord record;
 
   @override
+  State<RecordDetailsScreen> createState() => _RecordDetailsScreenState();
+}
+
+class _RecordDetailsScreenState extends State<RecordDetailsScreen> {
+  late DiagnosticRecord _record = widget.record;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFullRecordIfNeeded();
+  }
+
+  Future<void> _loadFullRecordIfNeeded() async {
+    final full = await widget.diagnostics.getById(widget.record.id);
+    if (full != null && mounted) {
+      setState(() => _record = full);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final record = _record;
     final payload = record.payload;
     return Scaffold(
       appBar: AppBar(
@@ -57,7 +79,7 @@ class RecordDetailsScreen extends StatelessWidget {
       ),
       body: payload is HttpPayload
           ? _HttpDetails(
-              diagnostics: diagnostics,
+              diagnostics: widget.diagnostics,
               record: record,
               payload: payload,
             )
@@ -266,7 +288,7 @@ class _HttpTab extends StatelessWidget {
         initiallyExpanded: true,
         childrenPadding: const EdgeInsets.fromLTRB(0, 0, 0, 12),
         children: [
-          if (_hasCopyableBody(body))
+          if (hasCopyableBody(body))
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
@@ -292,153 +314,4 @@ class _HttpTab extends StatelessWidget {
       ],
     ],
   );
-}
-
-bool _hasCopyableBody(BodySnapshot? body) {
-  if (body == null || body.state != BodyCaptureState.captured) return false;
-  final data = body.data;
-  if (data == null) return false;
-  if (data is String) return data.isNotEmpty;
-  if (data is Iterable) return data.isNotEmpty;
-  if (data is Map) return data.isNotEmpty;
-  return true;
-}
-
-/// Inspects captured text, JSON and media metadata without reading file bytes.
-class BodyInspector extends StatefulWidget {
-  const BodyInspector({super.key, required this.body});
-  final BodySnapshot? body;
-
-  @override
-  State<BodyInspector> createState() => _BodyInspectorState();
-}
-
-class _BodyInspectorState extends State<BodyInspector> {
-  String _mode = 'Pretty';
-  String _search = '';
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final body = widget.body;
-    if (body == null || body.state != BodyCaptureState.captured) {
-      return Text(switch (body?.state) {
-        BodyCaptureState.unsupported =>
-          'Body unavailable: the client did not capture a supported body.',
-        BodyCaptureState.disabled => 'Body capture was disabled.',
-        _ => 'No body captured.',
-      });
-    }
-    final data = body.data;
-    final raw = data is String ? data : jsonEncode(data);
-    final pretty = data is String
-        ? data
-        : const JsonEncoder.withIndent('  ').convert(data);
-    final isJson = body.representation == BodyRepresentation.json;
-    final isMedia = body.representation == BodyRepresentation.media;
-    final visible = _mode == 'Raw' ? raw : pretty;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (isMedia)
-          const Text('Media metadata only; file contents were not captured.'),
-        if (isJson)
-          Wrap(
-            spacing: 8,
-            children: [
-              for (final mode in ['Tree', 'Pretty', 'Raw'])
-                ChoiceChip(
-                  label: Text(mode),
-                  selected: _mode == mode,
-                  onSelected: (_) => setState(() => _mode = mode),
-                ),
-              if (_mode == 'Tree')
-                TextButton(
-                  onPressed: () => setState(() => _expanded = !_expanded),
-                  child: Text(_expanded ? 'Collapse' : 'Expand'),
-                ),
-            ],
-          ),
-        TextField(
-          decoration: const InputDecoration(labelText: 'Search body'),
-          onChanged: (value) => setState(() => _search = value),
-        ),
-        if (_search.isNotEmpty)
-          Text(
-            visible.toLowerCase().contains(_search.toLowerCase())
-                ? 'Match found'
-                : 'No match',
-          ),
-        if (_mode == 'Tree' && isJson)
-          _JsonTree(value: data, expanded: _expanded)
-        else
-          SelectableText(visible),
-      ],
-    );
-  }
-}
-
-class _JsonTree extends StatefulWidget {
-  const _JsonTree({
-    super.key,
-    required this.value,
-    required this.expanded,
-    this.label,
-  });
-  final Object? value;
-  final bool expanded;
-  final String? label;
-
-  @override
-  State<_JsonTree> createState() => _JsonTreeState();
-}
-
-class _JsonTreeState extends State<_JsonTree> {
-  late bool _open = widget.expanded;
-
-  @override
-  void didUpdateWidget(covariant _JsonTree oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.expanded != widget.expanded) _open = widget.expanded;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final value = widget.value;
-    if (value is! Map && value is! List) {
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: SelectableText(
-          '${widget.label ?? 'Value'}: ${jsonEncode(value)}',
-        ),
-      );
-    }
-    final length = value is Map ? value.length : (value as List).length;
-    return ExpansionTile(
-      key: ValueKey((widget.label, widget.expanded)),
-      title: Text('${widget.label ?? 'Root'} ($length)'),
-      initiallyExpanded: _open,
-      onExpansionChanged: (open) => setState(() => _open = open),
-      children: _open
-          ? [
-              if (value is Map)
-                for (final entry in value.entries)
-                  _JsonTree(
-                    key: ValueKey(entry.key),
-                    label: entry.key.toString(),
-                    value: entry.value,
-                    expanded: widget.expanded,
-                  ),
-              if (value is List)
-                for (var i = 0; i < value.length; i++)
-                  _JsonTree(
-                    key: ValueKey(i),
-                    label: '[$i]',
-                    value: value[i],
-                    expanded: widget.expanded,
-                  ),
-            ]
-          : const [],
-    );
-  }
 }

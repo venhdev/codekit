@@ -127,6 +127,61 @@ void main() {
     expect(await reopened.getById(receipt.recordId!), isNotNull);
     await reopened.close();
   });
+
+  test('query returns lightweight summary records while getById returns full body and headers', () async {
+    final httpRecord = DiagnosticRecord(
+      id: 'lazy-test',
+      recordedAt: DateTime.utc(2026, 1, 1),
+      recordMode: RecordMode.storeRaw,
+      context: {'deep': 'context'},
+      payload: HttpPayload(
+        requestStartedAt: DateTime.utc(2026, 1, 1),
+        method: 'POST',
+        uri: Uri.parse('https://api.example.com/items'),
+        duration: const Duration(milliseconds: 42),
+        requestHeaders: {
+          'authorization': ['Bearer token'],
+        },
+        requestBody: const BodySnapshot.text('request-payload'),
+        response: HttpResponseSnapshot(
+          statusCode: 200,
+          headers: {
+            'content-type': ['application/json'],
+          },
+          body: const BodySnapshot.text('response-payload'),
+        ),
+      ),
+    );
+
+    await store.appendAndRetain(httpRecord, retention: RetentionPolicy());
+
+    final page = await store.query(RecordQuery());
+    expect(page.records, hasLength(1));
+    final summary = page.records.first;
+    expect(summary.id, 'lazy-test');
+    expect(summary.context, isNull);
+    final summaryPayload = summary.payload as HttpPayload;
+    expect(summaryPayload.method, 'POST');
+    expect(summaryPayload.uri.toString(), 'https://api.example.com/items');
+    expect(summaryPayload.duration?.inMilliseconds, 42);
+    expect(summaryPayload.requestHeaders, isNull);
+    expect(summaryPayload.requestBody, isNull);
+    expect(summaryPayload.response?.statusCode, 200);
+    expect(summaryPayload.response?.headers, isNull);
+    expect(summaryPayload.response?.body, isNull);
+
+    final full = (await store.getById('lazy-test'))!;
+    expect(full.context, {'deep': 'context'});
+    final fullPayload = full.payload as HttpPayload;
+    expect(fullPayload.requestHeaders, {
+      'authorization': ['Bearer token'],
+    });
+    expect(fullPayload.requestBody?.data, 'request-payload');
+    expect(fullPayload.response?.body?.data, 'response-payload');
+    expect(fullPayload.response?.headers, {
+      'content-type': ['application/json'],
+    });
+  });
 }
 
 DiagnosticRecord record(String id, String message) => DiagnosticRecord(

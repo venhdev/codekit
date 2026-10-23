@@ -114,16 +114,9 @@ class _FiltersSheetState extends State<FiltersSheet> {
         Wrap(
           spacing: 8,
           children: [
-            for (final (group, label) in <(HttpStatusGroup, String)>[
-              (HttpStatusGroup.informational, '1xx'),
-              (HttpStatusGroup.success, '2xx'),
-              (HttpStatusGroup.redirection, '3xx'),
-              (HttpStatusGroup.clientError, '4xx'),
-              (HttpStatusGroup.serverError, '5xx'),
-              (HttpStatusGroup.unknown, 'Unknown'),
-            ])
+            for (final group in HttpStatusGroup.values)
               FilterChip(
-                label: Text(label),
+                label: Text(group.label),
                 selected: statuses.contains(group),
                 onSelected: (_) => _toggle(statuses, group),
               ),
@@ -164,15 +157,9 @@ class _FiltersSheetState extends State<FiltersSheet> {
         Wrap(
           spacing: 8,
           children: [
-            for (final (level, label) in <(DurationLevel, String)>[
-              (DurationLevel.fast, 'Fast'),
-              (DurationLevel.normal, 'Normal'),
-              (DurationLevel.warn, 'Warn'),
-              (DurationLevel.slow, 'Slow'),
-              (DurationLevel.unknown, 'None'),
-            ])
+            for (final level in DurationLevel.values)
               FilterChip(
-                label: Text(label),
+                label: Text(level.label),
                 selected: durations.contains(level),
                 onSelected: (_) => _toggle(durations, level),
               ),
@@ -183,12 +170,9 @@ class _FiltersSheetState extends State<FiltersSheet> {
         Wrap(
           spacing: 8,
           children: [
-            for (final (type, label) in <(DiagnosticRecordType, String)>[
-              (DiagnosticRecordType.log, 'App log'),
-              (DiagnosticRecordType.http, 'HTTP record'),
-            ])
+            for (final type in DiagnosticRecordType.values)
               FilterChip(
-                label: Text(label),
+                label: Text(type.label),
                 selected: types.contains(type),
                 onSelected: (_) => _toggleType(type),
               ),

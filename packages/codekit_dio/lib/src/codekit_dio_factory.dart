@@ -10,6 +10,7 @@ import 'dio_diagnostics_extension.dart';
 Dio createCodeKitDio({
   BaseOptions? options,
   CodeKitDiagnostics? diagnostics,
+  int? maxBodyCaptureBytes,
   DevProxyConfig Function()? proxyProvider,
   DevProxyDioOptions devProxyOptions = const DevProxyDioOptions(),
   List<Interceptor>? interceptors,
@@ -22,7 +23,7 @@ Dio createCodeKitDio({
   }
 
   if (diagnostics != null) {
-    dio.withDiagnostics(diagnostics);
+    dio.withDiagnostics(diagnostics, maxBodyCaptureBytes: maxBodyCaptureBytes);
   }
 
   if (interceptors != null && interceptors.isNotEmpty) {

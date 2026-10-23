@@ -218,6 +218,47 @@ void main() {
       sink.dispose();
     });
   });
+
+  group('HttpWebhookSinkBase', () {
+    test(
+      'subclass dispatches request and closes resources on dispose',
+      () async {
+        final transport = _FakeTransport();
+        final sink = _TestWebhookSink(transport: transport);
+
+        sink.dispatch(_logRecord('custom'));
+        final request = await transport.request.future;
+        expect(request.method, 'POST');
+        expect(request.uri, Uri.parse('https://custom.test/endpoint'));
+        expect(utf8.decode(request.body), 'custom');
+
+        sink.dispose();
+        expect(transport.closed, isFalse);
+      },
+    );
+  });
+}
+
+final class _TestWebhookSink extends HttpWebhookSinkBase {
+  _TestWebhookSink({required super.transport});
+
+  @override
+  WebhookRequest buildRequest(DiagnosticRecord record) {
+    return WebhookRequest(
+      uri: Uri.parse('https://custom.test/endpoint'),
+      method: 'POST',
+      headers: const {},
+      body: utf8.encode((record.payload as LogPayload).message),
+    );
+  }
+
+  @override
+  WebhookDeliveryFailure? evaluateResponse(WebhookResponse response) {
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      return const WebhookDeliveryFailure();
+    }
+    return null;
+  }
 }
 
 final class _FakeTransport implements WebhookTransport {

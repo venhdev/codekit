@@ -15,7 +15,7 @@ class DiagnosticRecordCodec {
   const DiagnosticRecordCodec();
   Uint8List encode(DiagnosticRecord record) =>
       Uint8List.fromList(utf8.encode(jsonEncode(record.toJson())));
-  RecordDecodeResult decode(List<int> bytes) {
+  RecordDecodeResult decode(List<int> bytes, {bool summaryOnly = false}) {
     try {
       final m = jsonMap(jsonDecode(utf8.decode(bytes)));
       final version = m['schemaVersion'];
@@ -27,7 +27,7 @@ class DiagnosticRecordCodec {
       }
       return RecordDecodeResult(
         RecordDecodeStatus.success,
-        DiagnosticRecord.fromJson(m),
+        DiagnosticRecord.fromJson(m, summaryOnly: summaryOnly),
       );
     } catch (_) {
       return const RecordDecodeResult(RecordDecodeStatus.invalid);

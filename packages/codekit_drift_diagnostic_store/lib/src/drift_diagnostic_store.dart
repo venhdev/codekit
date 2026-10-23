@@ -99,8 +99,15 @@ final class DriftDiagnosticStore implements DiagnosticStore {
     }
   }
 
-  DiagnosticRecord? _decode(String id, String json) {
-    final result = const DiagnosticRecordCodec().decode(utf8.encode(json));
+  DiagnosticRecord? _decode(
+    String id,
+    String json, {
+    bool summaryOnly = false,
+  }) {
+    final result = const DiagnosticRecordCodec().decode(
+      utf8.encode(json),
+      summaryOnly: summaryOnly,
+    );
     if (result.status == RecordDecodeStatus.success) return result.record;
     _warn(
       'Skipping unreadable persisted diagnostic record "$id" (${result.status.name}).',
@@ -202,7 +209,7 @@ final class DriftDiagnosticStore implements DiagnosticStore {
 
       for (final row in rows) {
         scanBefore = row.order;
-        final record = _decode(row.recordId, row.recordJson);
+        final record = _decode(row.recordId, row.recordJson, summaryOnly: true);
         if (record != null && query.matches(record)) {
           matching.add((order: row.order, record: record));
           if (matching.length > query.limit) break;

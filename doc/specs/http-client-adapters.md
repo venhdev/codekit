@@ -31,23 +31,31 @@ The extension checks existing CodeKitDioInterceptor instances using `identical(i
 
 ```dart
 extension DioDiagnosticsExtension on Dio {
-  Dio withDiagnostics(CodeKitDiagnostics diagnostics) {
+  Dio withDiagnostics(
+    CodeKitDiagnostics diagnostics, {
+    int? maxBodyCaptureBytes,
+  }) {
     final exists = interceptors
         .whereType<CodeKitDioInterceptor>()
         .any((i) => identical(i.diagnostics, diagnostics));
     if (!exists) {
-      interceptors.add(CodeKitDioInterceptor(diagnostics: diagnostics));
+      interceptors.add(
+        CodeKitDioInterceptor(
+          diagnostics: diagnostics,
+          maxBodyCaptureBytes: maxBodyCaptureBytes,
+        ),
+      );
     }
     return this;
   }
 }
 ```
 
-Each interceptor allocates the request/record ID before dispatch, records timing in private per-interceptor request metadata, and submits one completed HttpInput through diagnostics.log after response or error. Each retry attempt that re-enters the interceptor is recorded separately; redirects handled inside the Dio adapter remain part of one logical request. It does not inject an ID network header. Capture processing must not prevent Dio handler continuation or alter application results. Snapshot only supported request data and multipart file metadata; byte arrays and streamed response bodies are unsupported.
+Each interceptor allocates the request/record ID before dispatch, records timing in private per-interceptor request metadata, and submits one completed HttpInput through diagnostics.log after response or error. Each retry attempt that re-enters the interceptor is recorded separately; redirects handled inside the Dio adapter remain part of one logical request. It does not inject an ID network header. Capture processing must not prevent Dio handler continuation or alter application results. Snapshot only supported request data and multipart file metadata; byte arrays and streamed response bodies are unsupported. When `maxBodyCaptureBytes` is provided and body size exceeds the threshold, payload data is omitted and captured as `BodyCaptureState.overflow` with `{sizeBytes, contentType}` metadata.
 
 ## package:http
 
-`codekit_http` depends on codekit_core and package:http. It exposes `CodeKitHttpClient extends http.BaseClient` and `http.Client.withDiagnostics()`. The extension returns a wrapper, not the same client, and the consumer must use that returned value. Each public request method forwards to the corresponding inner-client method; convenience methods do not route through the wrapper's send().
+`codekit_http` depends on codekit_core and package:http. It exposes `CodeKitHttpClient extends http.BaseClient` and `http.Client.withDiagnostics({int? maxBodyCaptureBytes})`. The extension returns a wrapper, not the same client, and the consumer must use that returned value. Each public request method forwards to the corresponding inner-client method; convenience methods do not route through the wrapper's send().
 
 ```dart
 import 'package:http/http.dart' as http;
@@ -65,11 +73,11 @@ Request bodies already available for safe snapshotting may be captured. Multipar
 
 For head/get/post/put/patch/delete, the inner client owns networking and buffering. The wrapper receives an already-completed Response, snapshots its available data, and returns that same instance, including any custom subclass and final-URL interface. It does not rebuild the response or change the inner method's status/error behavior. Request metadata is a best-effort preview of the caller's arguments, not a claim to observe additional transport headers or custom-client transformations. An unsupported preview must not reject input accepted by the inner client.
 
-Buffered body capture has no size limit and never truncates data. JSON (`application/json` or `application/*+json`) uses strict UTF-8 and is stored as structured JSON; malformed JSON with valid UTF-8 falls back to text. Text (`text/*`, `application/xml` or `*+xml`) uses the response's charset behavior. Empty buffered bodies are absent; binary/unknown content types or decode failures are unsupported. Large bodies incur proportional snapshot, redaction and storage costs; diagnostics cannot promise zero CPU/memory overhead.
+Buffered body capture defaults to no size limit. To prevent excessive memory overhead and UI stalls when processing massive payloads, adapters accept an optional `maxBodyCaptureBytes` configuration (via `withDiagnostics`, `createCodeKitDio`, `createCodeKitHttpClient`). When payload byte length exceeds `maxBodyCaptureBytes`, body data is omitted and captured as `BodyCaptureState.overflow` with `{sizeBytes, contentType}` metadata. Omission instead of naive string truncation ensures valid JSON structures are not malformed and guarantees zero data leakage under `RedactionPolicy`. Supported JSON (`application/json` or `application/*+json`) within limits uses strict UTF-8 and is stored as structured JSON; malformed JSON with valid UTF-8 falls back to text. Text (`text/*`, `application/xml` or `*+xml`) uses the response's charset behavior. Empty buffered bodies are absent; binary/unknown content types or decode failures are unsupported. Large unconstrained bodies incur proportional snapshot, redaction and storage costs; diagnostics cannot promise zero CPU/memory overhead.
 
 send() returns the original StreamedResponse and stream without creating a subscription, wrapping, draining or rebuilding them. It records status/headers at response headers, with body unsupported, even if the application never consumes the stream. Subsequent body errors, pause/resume and cancellation belong entirely to the original application stream; they do not update the completed record.
 
-read()/readBytes() forward to the exact inner methods, preserving custom overrides and original error behavior. read() captures the returned text without a size limit; readBytes() returns the original bytes but records body unsupported because no media type is exposed. These APIs expose no response status/headers; diagnostics must leave those fields unknown rather than fabricate them or issue another request.
+read()/readBytes() forward to the exact inner methods, preserving custom overrides and original error behavior. read() captures the returned text subject to `maxBodyCaptureBytes`; readBytes() returns the original bytes but records body unsupported because no media type is exposed. These APIs expose no response status/headers; diagnostics must leave those fields unknown rather than fabricate them or issue another request.
 
 One completed record is submitted per method invocation when its inner Future completes or throws. For buffered methods this includes the inner client's body buffering; for send() it ends at headers. Duration stops before response snapshot processing. Record/Trace acceptance follows completion and snapshot preparation, not later application consumption. Snapshot/setup/recorder failures must not replace results or original errors, nor cause a second client invocation. Persistence and sink delivery are not awaited on the client path. Redaction applies to the snapshot through the core recorder/export pipeline.
 

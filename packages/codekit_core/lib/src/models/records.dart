@@ -23,7 +23,7 @@ enum LogLevel {
 
 enum RecordMode { redactBeforeRecording, storeRaw }
 
-enum BodyCaptureState { absent, captured, disabled, unsupported }
+enum BodyCaptureState { absent, captured, disabled, unsupported, overflow }
 
 enum BodyRepresentation { text, json, media }
 
@@ -41,6 +41,15 @@ enum HttpStatusGroup {
     redirection => DiagnosticTone.info,
     clientError => DiagnosticTone.warning,
     serverError => DiagnosticTone.danger,
+  };
+
+  String get label => switch (this) {
+    informational => '1xx',
+    success => '2xx',
+    redirection => '3xx',
+    clientError => '4xx',
+    serverError => '5xx',
+    unknown => 'Unknown',
   };
 
   static HttpStatusGroup fromCode(int? code) {
@@ -151,6 +160,9 @@ final class BodySnapshot {
   final BodyCaptureState state;
   final BodyRepresentation? representation;
   final Object? data;
+  const BodySnapshot._({required this.state, this.data})
+    : representation = null;
+
   const BodySnapshot.absent()
     : state = BodyCaptureState.absent,
       representation = null,
@@ -163,6 +175,22 @@ final class BodySnapshot {
     : state = BodyCaptureState.unsupported,
       representation = null,
       data = null;
+  factory BodySnapshot.overflow({int? sizeBytes, String? contentType}) {
+    return BodySnapshot._(
+      state: BodyCaptureState.overflow,
+      data: sizeBytes == null
+          ? null
+          : (contentType == null
+                ? {'sizeBytes': sizeBytes}
+                : {'sizeBytes': sizeBytes, 'contentType': contentType}),
+    );
+  }
+  factory BodySnapshot.oversized(int sizeBytes, [String? contentType]) {
+    return BodySnapshot.overflow(
+      sizeBytes: sizeBytes,
+      contentType: contentType,
+    );
+  }
   const BodySnapshot.text(String value)
     : state = BodyCaptureState.captured,
       representation = BodyRepresentation.text,
@@ -188,6 +216,10 @@ final class BodySnapshot {
       BodyCaptureState.absent => const BodySnapshot.absent(),
       BodyCaptureState.disabled => const BodySnapshot.disabled(),
       BodyCaptureState.unsupported => const BodySnapshot.unsupported(),
+      BodyCaptureState.overflow => BodySnapshot.overflow(
+        sizeBytes: (data as Map?)?['sizeBytes'] as int?,
+        contentType: (data as Map?)?['contentType'] as String?,
+      ),
       BodyCaptureState.captured => throw ArgumentError(
         'Missing body representation',
       ),
@@ -197,10 +229,18 @@ final class BodySnapshot {
     'state': state.name,
     if (representation != null) 'representation': representation!.name,
     if (state == BodyCaptureState.captured) 'data': data,
+    if (state == BodyCaptureState.overflow && data != null) 'data': data,
   };
   factory BodySnapshot.fromJson(Map<String, Object?> m) {
     final state = BodyCaptureState.values.byName(m['state'] as String);
     if (state != BodyCaptureState.captured) {
+      if (state == BodyCaptureState.overflow) {
+        final d = m['data'] as Map?;
+        return BodySnapshot.overflow(
+          sizeBytes: d?['sizeBytes'] as int?,
+          contentType: d?['contentType'] as String?,
+        );
+      }
       if (m.containsKey('data') || m.containsKey('representation')) {
         throw FormatException('Uncaptured body contains data');
       }
@@ -383,6 +423,16 @@ final class DiagnosticRecord {
        payload = _detachPayload(payload) {
     if (id.isEmpty) throw ArgumentError('Empty record ID');
   }
+
+  DiagnosticRecord._trusted({
+    required this.id,
+    required this.recordedAt,
+    required this.recordMode,
+    required this.payload,
+    this.source,
+    this.context,
+  });
+
   static DiagnosticPayload _detachPayload(DiagnosticPayload p) => switch (p) {
     LogPayload() => LogPayload(
       message: p.message,
@@ -420,7 +470,10 @@ final class DiagnosticRecord {
     if (context != null) 'context': context,
     'payload': payload.toJson(),
   };
-  factory DiagnosticRecord.fromJson(Map<String, Object?> m) {
+  factory DiagnosticRecord.fromJson(
+    Map<String, Object?> m, {
+    bool summaryOnly = false,
+  }) {
     final p = jsonMap(m['payload']);
     final error = p['error'] == null
         ? null
@@ -433,34 +486,57 @@ final class DiagnosticRecord {
           level: LogLevel.values.byName(p['level'] as String),
           tags: p['tags'] == null ? null : Set<String>.from(p['tags'] as List),
           error: error,
-          stackTrace: p['stackTrace'] as String?,
+          stackTrace: summaryOnly ? null : p['stackTrace'] as String?,
         );
       case 'http':
+        final duration = p['durationMicros'] == null
+            ? null
+            : Duration(microseconds: p['durationMicros'] as int);
+        if (duration?.isNegative ?? false) {
+          throw FormatException('Duration cannot be negative');
+        }
+        final method = p['method'] as String;
+        if (method.isEmpty) {
+          throw FormatException('HTTP method cannot be empty');
+        }
         payload = HttpPayload(
           requestStartedAt: _utc(p['requestStartedAt'] as String),
-          method: p['method'] as String,
+          method: method,
           uri: Uri.parse(p['uri'] as String),
-          duration: p['durationMicros'] == null
+          duration: duration,
+          requestHeaders: summaryOnly
               ? null
-              : Duration(microseconds: p['durationMicros'] as int),
-          requestHeaders: headersFromJson(p['requestHeaders']),
-          requestBody: p['requestBody'] == null
+              : headersFromJson(p['requestHeaders']),
+          requestBody: summaryOnly
               ? null
-              : BodySnapshot.fromJson(jsonMap(p['requestBody'])),
+              : (p['requestBody'] == null
+                    ? null
+                    : BodySnapshot.fromJson(jsonMap(p['requestBody']))),
           response: p['response'] == null
               ? null
-              : HttpResponseSnapshot.fromJson(jsonMap(p['response'])),
+              : (summaryOnly
+                    ? HttpResponseSnapshot(
+                        statusCode:
+                            (p['response'] as Map)['statusCode'] as int?,
+                      )
+                    : HttpResponseSnapshot.fromJson(jsonMap(p['response']))),
           error: error,
         );
       default:
         throw FormatException('Unknown payload type');
     }
-    return DiagnosticRecord(
-      id: m['id'] as String,
+    final id = m['id'] as String;
+    if (id.isEmpty) {
+      throw FormatException('Record ID cannot be empty');
+    }
+    return DiagnosticRecord._trusted(
+      id: id,
       recordedAt: _utc(m['recordedAt'] as String),
       recordMode: RecordMode.values.byName(m['recordMode'] as String),
       source: m['source'] as String?,
-      context: m['context'] == null ? null : jsonMap(m['context']),
+      context: summaryOnly
+          ? null
+          : (m['context'] == null ? null : jsonMap(m['context'])),
       payload: payload,
     );
   }

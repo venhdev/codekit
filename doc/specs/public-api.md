@@ -108,8 +108,9 @@ Both client adapters expose `withDiagnostics()` from their independently install
 
 ```dart
 // Import the relevant adapter and client library in consumer code.
-final dio = Dio().withDiagnostics(diagnostics);
-final client = http.Client().withDiagnostics(diagnostics);
+// maxBodyCaptureBytes is optional (defaults to null = unlimited capture).
+final dio = Dio().withDiagnostics(diagnostics, maxBodyCaptureBytes: 1024 * 1024);
+final client = http.Client().withDiagnostics(diagnostics, maxBodyCaptureBytes: 1024 * 1024);
 ```
 
 ## Recording receipt
@@ -185,6 +186,14 @@ Main-screen search matches LOG message/source/error message and HTTP method/URI/
 
 The curated core library entrypoint exposes `log`, `createRecordId`, `shouldCaptureHttp`, get/query/delete/clear, manual and picker Trace operations, `isTraceActive`, `activeTraceRecordCount`, text exports, HTTP fragment formatting and dispose. `activeTraceRecordCount` is zero while no manual Trace capture is active and otherwise reports IDs accepted into that active capture; it does not promise that every ID remains queryable. Runtime changes use `recordMode`, `redactionPolicy` and `captureExcludeUriPatterns` setters; configuration does not require a separate settings/updateSettings abstraction.
 
+Export and fragment generation logic is encapsulated within `DiagnosticExporter` (`codekit_core`), with `CodeKitDiagnostics` serving as a convenient delegating facade. Formatting results are typed via `ExportResult`, `ExportStatus`, `ExportRepresentation`, and `HttpFragment`.
+
+Enums across core and storage models provide canonical human-readable `.label` getters (`HttpStatusGroup.label`, `DurationLevel.label`, `DiagnosticRecordType.label`) to guarantee UI and filtering representation consistency without parallel switch statements.
+
 `captureExcludeUriPatterns` is nullable (no exclusions). Adapters can check `shouldCaptureHttp(uri)` before collection; the log entrypoint also checks it before normalization and every output branch. Excluded HTTP inputs return an excluded receipt without emitting repeated warnings.
+
+## Webhook sinks and base extensions
+
+The optional `codekit_webhook` package provides prebuilt integrations (`DiscordSink`, `TelegramSink`) and an extensible `HttpWebhookSinkBase` abstraction. Custom HTTP sinks extend `HttpWebhookSinkBase` to inherit lifecycle management, automatic circuit breaker cooling, and error handling, implementing only `buildRequest(record)` and `evaluateResponse(response)`. Failures are surfaced as `WebhookDeliveryFailure` with optional retry-after metadata.
 
 Platform clipboard/share and automatic sinks are integration responsibilities, not functions in core.

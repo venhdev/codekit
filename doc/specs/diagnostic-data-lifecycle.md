@@ -99,7 +99,7 @@ Retention is count-only and configured at initialization through `RetentionPolic
 
 When a write makes count exceed the limit, remove the oldest records by store order. The eviction batch is `ceil(maxRecords * 0.05)`; delete `max(currentCount - maxRecords, batchSize)` records so a larger overage is also corrected. For a limit of 100, adding record 101 removes five oldest records, leaving 96. This is one batch operation, not one deletion per subsequent insert.
 
-MVP has no age retention, byte accounting, total-size limit, oversized-record rejection or background expiration timer. Unlimited count does not bound RAM or disk consumption. Stored records remain queryable until explicit deletion or count eviction.
+MVP has no age retention, byte accounting, total-size limit, or background expiration timer. Unlimited count does not bound RAM or disk consumption. To bound payload memory consumption per request, client adapters provide opt-in `maxBodyCaptureBytes` limits (defaulting to unlimited). Payloads exceeding the threshold transition to `BodyCaptureState.overflow`, preserving metadata (`sizeBytes`, `contentType`) while omitting bulk data to prevent heap bloat and eliminate redaction syntax conflicts. Stored records remain queryable until explicit deletion or count eviction.
 
 Eviction removes records only. Trace sessions retain their original ID lists; there is no reverse reference tracking, session completeness check or cascade deletion. Missing IDs are handled only when export queries the session.
 

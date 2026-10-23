@@ -210,4 +210,23 @@ void main() {
     expect(records, hasLength(1));
     expect((records.single.payload as HttpPayload).error, isNotNull);
   });
+
+  test(
+    'maxBodyCaptureBytes caps oversized request and response bodies in Dio',
+    () async {
+      final cappedDio = Dio(
+        BaseOptions(baseUrl: 'http://127.0.0.1:${server.port}'),
+      )..withDiagnostics(diagnostics, maxBodyCaptureBytes: 100);
+
+      final largeData = {'items': List.filled(50, 'long-element-text-sample')};
+      await cappedDio.post('/upload', data: largeData);
+
+      final records = await recordsFor(diagnostics);
+      expect(records, hasLength(1));
+      final payload = records.single.payload as HttpPayload;
+      expect(payload.requestBody!.state, BodyCaptureState.overflow);
+      expect((payload.requestBody!.data as Map)['sizeBytes'], greaterThan(100));
+      cappedDio.close(force: true);
+    },
+  );
 }

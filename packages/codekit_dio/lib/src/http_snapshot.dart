@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:codekit_core/codekit_core.dart';
@@ -20,7 +21,7 @@ Map<String, List<String>> snapshotHeaders(Map source) {
   return headers;
 }
 
-BodySnapshot snapshotBody(Object? data) {
+BodySnapshot snapshotBody(Object? data, {int? maxBodyCaptureBytes}) {
   if (data == null) return const BodySnapshot.absent();
   if (data is FormData) {
     final fields = <String, List<String>>{};
@@ -43,8 +44,22 @@ BodySnapshot snapshotBody(Object? data) {
   if (data is Uint8List) {
     return const BodySnapshot.unsupported();
   }
-  if (data is String) return BodySnapshot.text(data);
+  if (data is String) {
+    final bytesLength = utf8.encode(data).length;
+    if (maxBodyCaptureBytes != null && bytesLength > maxBodyCaptureBytes) {
+      return BodySnapshot.oversized(bytesLength, 'text/plain');
+    }
+    return BodySnapshot.text(data);
+  }
   if (data is num || data is bool || data is Map || data is List) {
+    if (maxBodyCaptureBytes != null && (data is Map || data is List)) {
+      try {
+        final estimatedLength = utf8.encode(jsonEncode(data)).length;
+        if (estimatedLength > maxBodyCaptureBytes) {
+          return BodySnapshot.oversized(estimatedLength, 'application/json');
+        }
+      } catch (_) {}
+    }
     try {
       return BodySnapshot.json(data);
     } on ArgumentError {
@@ -54,9 +69,12 @@ BodySnapshot snapshotBody(Object? data) {
   return const BodySnapshot.unsupported();
 }
 
-BodySnapshot snapshotResponseBody(Response<dynamic> response) {
+BodySnapshot snapshotResponseBody(
+  Response<dynamic> response, {
+  int? maxBodyCaptureBytes,
+}) {
   if (response.requestOptions.responseType == ResponseType.stream) {
     return const BodySnapshot.unsupported();
   }
-  return snapshotBody(response.data);
+  return snapshotBody(response.data, maxBodyCaptureBytes: maxBodyCaptureBytes);
 }

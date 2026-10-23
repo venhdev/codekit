@@ -6,9 +6,10 @@ import 'http_snapshot.dart';
 /// Captures completed Dio requests without changing request or response flow.
 class CodeKitDioInterceptor extends Interceptor {
   final CodeKitDiagnostics diagnostics;
+  final int? maxBodyCaptureBytes;
   final Expando<_RequestCapture> _captures = Expando<_RequestCapture>();
 
-  CodeKitDioInterceptor({required this.diagnostics});
+  CodeKitDioInterceptor({required this.diagnostics, this.maxBodyCaptureBytes});
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
@@ -21,7 +22,10 @@ class CodeKitDioInterceptor extends Interceptor {
           method: options.method,
           uri: options.uri,
           requestHeaders: snapshotHeaders(options.headers),
-          requestBody: snapshotBody(options.data),
+          requestBody: snapshotBody(
+            options.data,
+            maxBodyCaptureBytes: maxBodyCaptureBytes,
+          ),
         );
         _captures[options] = capture;
       }
@@ -52,7 +56,10 @@ class CodeKitDioInterceptor extends Interceptor {
             response: HttpResponseSnapshot(
               statusCode: response.statusCode,
               headers: snapshotHeaders(response.headers.map),
-              body: snapshotResponseBody(response),
+              body: snapshotResponseBody(
+                response,
+                maxBodyCaptureBytes: maxBodyCaptureBytes,
+              ),
             ),
           ),
         );
@@ -86,7 +93,10 @@ class CodeKitDioInterceptor extends Interceptor {
                 : HttpResponseSnapshot(
                     statusCode: response.statusCode,
                     headers: snapshotHeaders(response.headers.map),
-                    body: snapshotResponseBody(response),
+                    body: snapshotResponseBody(
+                      response,
+                      maxBodyCaptureBytes: maxBodyCaptureBytes,
+                    ),
                   ),
             error: DiagnosticError(
               type: err.type.name,

@@ -16,6 +16,7 @@ import '../shared/guarded_action.dart';
 import 'diagnostic_record_tile.dart';
 import 'filters_sheet.dart';
 import 'records_controller.dart';
+import 'widgets/active_filter_chips_bar.dart';
 
 class CodeKitDiagnosticsScreen extends StatefulWidget {
   const CodeKitDiagnosticsScreen({
@@ -366,7 +367,7 @@ class _DiagnosticsRecordsScreenState extends State<_DiagnosticsRecordsScreen> {
             ],
           ),
         ),
-        if (_controller.hasActiveFilters) _activeFilterChipsRow(),
+        ActiveFilterChipsBar(controller: _controller),
         Expanded(child: _recordsList()),
       ],
     ),
@@ -482,154 +483,6 @@ class _DiagnosticsRecordsScreenState extends State<_DiagnosticsRecordsScreen> {
     return _selectionMode
         ? list
         : RefreshIndicator(onRefresh: _controller.reload, child: list);
-  }
-
-  Widget _activeFilterChipsRow() {
-    String statusLabel(HttpStatusGroup group) => switch (group) {
-      HttpStatusGroup.informational => '1xx',
-      HttpStatusGroup.success => '2xx',
-      HttpStatusGroup.redirection => '3xx',
-      HttpStatusGroup.clientError => '4xx',
-      HttpStatusGroup.serverError => '5xx',
-      HttpStatusGroup.unknown => 'Unknown',
-    };
-
-    String durationLabel(DurationLevel level) => switch (level) {
-      DurationLevel.fast => 'Fast',
-      DurationLevel.normal => 'Normal',
-      DurationLevel.warn => 'Warn',
-      DurationLevel.slow => 'Slow',
-      DurationLevel.unknown => 'None',
-    };
-
-    return SizedBox(
-      height: 40,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-        children: [
-          for (final group in _controller.statusGroups)
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: InputChip(
-                label: Text(statusLabel(group)),
-                onDeleted: () {
-                  final next = Set<HttpStatusGroup>.of(_controller.statusGroups)
-                    ..remove(group);
-                  _controller.applyFilters(
-                    statuses: next,
-                    durations: _controller.durationLevels,
-                    recordTypes: _controller.types,
-                    from: _controller.from,
-                    to: _controller.to,
-                  );
-                },
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-          for (final level in _controller.durationLevels)
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: InputChip(
-                label: Text(durationLabel(level)),
-                onDeleted: () {
-                  final next = Set<DurationLevel>.of(_controller.durationLevels)
-                    ..remove(level);
-                  _controller.applyFilters(
-                    statuses: _controller.statusGroups,
-                    durations: next,
-                    recordTypes: _controller.types,
-                    from: _controller.from,
-                    to: _controller.to,
-                  );
-                },
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-          for (final type in _controller.types)
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: InputChip(
-                label: Text(
-                  type == DiagnosticRecordType.http ? 'HTTP record' : 'App log',
-                ),
-                onDeleted: () {
-                  final next = Set<DiagnosticRecordType>.of(_controller.types)
-                    ..remove(type);
-                  final nextMethods =
-                      next.length == 1 &&
-                          next.contains(DiagnosticRecordType.log)
-                      ? const <String>{}
-                      : _controller.methods;
-                  _controller.applyFilters(
-                    statuses: _controller.statusGroups,
-                    durations: _controller.durationLevels,
-                    recordTypes: next,
-                    methods: nextMethods,
-                    from: _controller.from,
-                    to: _controller.to,
-                  );
-                },
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-          for (final method in _controller.methods)
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: InputChip(
-                label: Text(method),
-                onDeleted: () {
-                  final next = Set<String>.of(_controller.methods)
-                    ..remove(method);
-                  _controller.applyFilters(
-                    statuses: _controller.statusGroups,
-                    durations: _controller.durationLevels,
-                    recordTypes: _controller.types,
-                    methods: next,
-                    from: _controller.from,
-                    to: _controller.to,
-                  );
-                },
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-          if (_controller.from != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: InputChip(
-                label: Text(
-                  'From: ${_controller.from!.toLocal().toString().split('.').first}',
-                ),
-                onDeleted: () => _controller.applyFilters(
-                  statuses: _controller.statusGroups,
-                  durations: _controller.durationLevels,
-                  recordTypes: _controller.types,
-                  from: null,
-                  to: _controller.to,
-                ),
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-          if (_controller.to != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: InputChip(
-                label: Text(
-                  'To: ${_controller.to!.toLocal().toString().split('.').first}',
-                ),
-                onDeleted: () => _controller.applyFilters(
-                  statuses: _controller.statusGroups,
-                  durations: _controller.durationLevels,
-                  recordTypes: _controller.types,
-                  from: _controller.from,
-                  to: null,
-                ),
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-        ],
-      ),
-    );
   }
 }
 

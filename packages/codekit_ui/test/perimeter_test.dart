@@ -133,32 +133,37 @@ void main() {
       );
     });
 
-    test('Boundary 5: enforces single-sourced DiagnosticCursorCodec across stores', () {
-      final driftLib = _resolveDir(
-        'packages/codekit_drift_diagnostic_store/lib',
-        '../codekit_drift_diagnostic_store/lib',
-      );
-      final rawBase64CursorPattern = RegExp(r'\bbase64Url\.(encode|decode)\b');
-      final violations = <String>[];
+    test(
+      'Boundary 5: enforces single-sourced DiagnosticCursorCodec across stores',
+      () {
+        final driftLib = _resolveDir(
+          'packages/codekit_drift_diagnostic_store/lib',
+          '../codekit_drift_diagnostic_store/lib',
+        );
+        final rawBase64CursorPattern = RegExp(
+          r'\bbase64Url\.(encode|decode)\b',
+        );
+        final violations = <String>[];
 
-      for (final file in _dartFiles(driftLib)) {
-        final path = _posixPath(file.path);
-        final lines = file.readAsLinesSync();
-        for (var i = 0; i < lines.length; i++) {
-          if (rawBase64CursorPattern.hasMatch(lines[i])) {
-            violations.add('$path:${i + 1}: ${lines[i].trim()}');
+        for (final file in _dartFiles(driftLib)) {
+          final path = _posixPath(file.path);
+          final lines = file.readAsLinesSync();
+          for (var i = 0; i < lines.length; i++) {
+            if (rawBase64CursorPattern.hasMatch(lines[i])) {
+              violations.add('$path:${i + 1}: ${lines[i].trim()}');
+            }
           }
         }
-      }
 
-      expect(
-        violations,
-        isEmpty,
-        reason:
-            'DriftDiagnosticStore must delegate cursor encoding/decoding to '
-            'DiagnosticCursorCodec in codekit_core.',
-      );
-    });
+        expect(
+          violations,
+          isEmpty,
+          reason:
+              'DriftDiagnosticStore must delegate cursor encoding/decoding to '
+              'DiagnosticCursorCodec in codekit_core.',
+        );
+      },
+    );
 
     test('Boundary 6: enforces single-sourced formatHttpCurl across diagnostics and webhook sinks', () {
       final coreLib = _resolveDir(

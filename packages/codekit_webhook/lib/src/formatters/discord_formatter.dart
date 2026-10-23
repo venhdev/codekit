@@ -25,6 +25,7 @@ Map<String, Object?> discordPayload(
   final embed = <String, Object?>{
     'description': description,
     if (title != null) 'title': _limitDiscord(title, 256),
+    // ignore: use_null_aware_elements
     if (color != null) 'color': color,
     if (footer != null) 'footer': {'text': _limitDiscord(footer, 2048)},
     if (options?.includeTimestamp ?? false)

@@ -1143,4 +1143,89 @@ void main() {
       expect(find.widgetWithText(InputChip, 'App log'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'BodyInspector displays overflow banner for oversized body snapshot',
+    (tester) async {
+      final diagnostics = CodeKitDiagnostics();
+      await diagnostics
+          .log(
+            HttpInput(
+              recordId: diagnostics.createRecordId(),
+              requestStartedAt: DateTime.now(),
+              method: 'POST',
+              uri: Uri.parse('https://example.test/upload'),
+              requestBody: BodySnapshot.overflow(
+                sizeBytes: 52428800,
+                contentType: 'application/json',
+              ),
+              response: const HttpResponseSnapshot(statusCode: 200),
+            ),
+          )
+          .persistedOrNull();
+
+      await tester.pumpWidget(
+        MaterialApp(home: CodeKitDiagnosticsScreen(diagnostics: diagnostics)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('POST https://example.test/upload'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Request'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining(
+          'Body omitted: payload exceeded maxBodyCaptureBytes limit',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('51200 KB'), findsOneWidget);
+      await diagnostics.dispose();
+    },
+  );
+
+  testWidgets(
+    'BodyInspector shows preview truncation banner when body text exceeds 100KB',
+    (tester) async {
+      final diagnostics = CodeKitDiagnostics();
+      final largeString = 'A' * 120000;
+      await diagnostics
+          .log(
+            HttpInput(
+              recordId: diagnostics.createRecordId(),
+              requestStartedAt: DateTime.now(),
+              method: 'GET',
+              uri: Uri.parse('https://example.test/large-text'),
+              response: HttpResponseSnapshot(
+                statusCode: 200,
+                body: BodySnapshot.text(largeString),
+              ),
+            ),
+          )
+          .persistedOrNull();
+
+      await tester.pumpWidget(
+        MaterialApp(home: CodeKitDiagnosticsScreen(diagnostics: diagnostics)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.textContaining('GET https://example.test/large-text'),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Response'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('Showing 100 KB preview of 117.2 KB'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Use "Copy body" to get complete content.'),
+        findsOneWidget,
+      );
+      await diagnostics.dispose();
+    },
+  );
 }

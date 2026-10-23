@@ -29,5 +29,18 @@ void main() {
       await diagnostics.dispose();
       dio.close(force: true);
     });
+
+    test('passes maxBodyCaptureBytes to CodeKitDioInterceptor', () async {
+      final dio = Dio();
+      final diagnostics = CodeKitDiagnostics();
+      dio.withDiagnostics(diagnostics, maxBodyCaptureBytes: 2048);
+
+      final interceptor = dio.interceptors
+          .whereType<CodeKitDioInterceptor>()
+          .single;
+      expect(interceptor.maxBodyCaptureBytes, 2048);
+      await diagnostics.dispose();
+      dio.close(force: true);
+    });
   });
 }

@@ -16,6 +16,9 @@ enum HeaderTarget {
 
 sealed class RedactionRule {
   const RedactionRule();
+
+  /// Applies this redaction rule to the mutable record JSON representation.
+  void apply(Map<String, Object?> recordMap, Map<String, Object?> payload);
 }
 
 final class HeaderRedactionRule extends RedactionRule {
@@ -23,11 +26,49 @@ final class HeaderRedactionRule extends RedactionRule {
   final HeaderTarget target;
   HeaderRedactionRule(Iterable<String> names, {this.target = HeaderTarget.both})
     : names = Set.unmodifiable(names.map((n) => n.toLowerCase()));
+
+  @override
+  void apply(Map<String, Object?> recordMap, Map<String, Object?> payload) {
+    if (payload['type'] != 'http') return;
+    if (target.includesRequest) {
+      _redactHeaders(payload['requestHeaders']);
+    }
+    if (target.includesResponse && payload['response'] is Map) {
+      _redactHeaders((payload['response'] as Map)['headers']);
+    }
+  }
+
+  void _redactHeaders(Object? headers) {
+    if (headers is! Map) return;
+    for (final key in headers.keys.toList()) {
+      if (names.contains((key as String).toLowerCase())) {
+        headers[key] = (headers[key] as List)
+            .map((_) => redactionMarker)
+            .toList();
+      }
+    }
+  }
 }
 
 final class QueryRedactionRule extends RedactionRule {
   final Set<String> names;
   QueryRedactionRule(Iterable<String> names) : names = Set.unmodifiable(names);
+
+  @override
+  void apply(Map<String, Object?> recordMap, Map<String, Object?> payload) {
+    if (payload['type'] != 'http') return;
+    final uri = Uri.parse(payload['uri'] as String);
+    if (!uri.queryParametersAll.keys.any(names.contains)) return;
+    final params = uri.queryParametersAll.map(
+      (k, values) => MapEntry(
+        k,
+        names.contains(k)
+            ? values.map((_) => redactionMarker).toList()
+            : values,
+      ),
+    );
+    payload['uri'] = uri.replace(queryParameters: params).toString();
+  }
 }
 
 final class BodyFieldRedactionRule extends RedactionRule {
@@ -42,11 +83,130 @@ final class BodyFieldRedactionRule extends RedactionRule {
       }
     }
   }
+
+  @override
+  void apply(Map<String, Object?> recordMap, Map<String, Object?> payload) {
+    if (payload['type'] != 'http') return;
+    _redactBodyFields(payload['requestBody']);
+    if (payload['response'] is Map) {
+      _redactBodyFields((payload['response'] as Map)['body']);
+    }
+  }
+
+  void _redactBodyFields(Object? value) {
+    if (value is! Map || value['state'] != 'captured') return;
+    final isText = value['representation'] == 'text';
+    if (!isText && value['representation'] != 'json') return;
+    Object? data = value['data'];
+    if (isText) {
+      try {
+        data = jsonDecode(data as String);
+      } catch (_) {
+        return;
+      }
+    }
+    var changed = false;
+    for (final path in paths) {
+      final keys = path.split('.');
+      Object? parent = data;
+      for (final key in keys.take(keys.length - 1)) {
+        parent = parent is Map ? parent[key] : null;
+      }
+      if (parent is Map && parent.containsKey(keys.last)) {
+        parent[keys.last] = redactionMarker;
+        changed = true;
+      }
+    }
+    if (changed) value['data'] = isText ? jsonEncode(data) : data;
+  }
 }
 
 final class TextRedactionRule extends RedactionRule {
   final RegExp pattern;
   const TextRedactionRule(this.pattern);
+
+  @override
+  void apply(Map<String, Object?> recordMap, Map<String, Object?> payload) {
+    if (recordMap.containsKey('context')) {
+      recordMap['context'] = _redactJsonStrings(recordMap['context']);
+    }
+    _redactDiagnosticError(payload['error']);
+    if (payload['type'] == 'log') {
+      payload['message'] = _redactText(payload['message'] as String);
+      if (payload['stackTrace'] is String) {
+        payload['stackTrace'] = _redactText(payload['stackTrace'] as String);
+      }
+      return;
+    }
+    if (payload['requestHeaders'] != null) {
+      payload['requestHeaders'] = _redactJsonStrings(payload['requestHeaders']);
+    }
+    if (payload['response'] is Map) {
+      final response = payload['response'] as Map;
+      if (response['headers'] != null) {
+        response['headers'] = _redactJsonStrings(response['headers']);
+      }
+    }
+    _redactBodyText(payload['requestBody']);
+    if (payload['response'] is Map) {
+      _redactBodyText((payload['response'] as Map)['body']);
+    }
+    final uri = Uri.parse(payload['uri'] as String);
+    final params = uri.queryParametersAll;
+    if (params.values.expand((v) => v).any((v) => _redactText(v) != v)) {
+      payload['uri'] = uri
+          .replace(
+            queryParameters: params.map(
+              (k, v) => MapEntry(k, v.map((s) => _redactText(s)).toList()),
+            ),
+          )
+          .toString();
+    }
+  }
+
+  String _redactText(String value) => value
+      .split(redactionMarker)
+      .map((piece) => piece.replaceAll(pattern, redactionMarker))
+      .join(redactionMarker);
+
+  Object? _redactJsonStrings(Object? value) => value is String
+      ? _redactText(value)
+      : value is List
+      ? value.map(_redactJsonStrings).toList()
+      : value is Map
+      ? value.map((k, child) => MapEntry(k, _redactJsonStrings(child)))
+      : value;
+
+  void _redactDiagnosticError(Object? error) {
+    if (error is! Map) return;
+    for (final key in ['message', 'stackTrace']) {
+      if (error[key] is String) {
+        error[key] = _redactText(error[key] as String);
+      }
+    }
+  }
+
+  void _redactBodyText(Object? body) {
+    if (body is! Map || body['state'] != 'captured') return;
+    if (body['representation'] == 'text') {
+      Object? parsed;
+      var isJson = false;
+      try {
+        parsed = jsonDecode(body['data'] as String);
+        isJson = true;
+      } catch (_) {}
+      if (isJson) {
+        final changed = _redactJsonStrings(parsed);
+        if (jsonEncode(changed) != jsonEncode(parsed)) {
+          body['data'] = jsonEncode(changed);
+        }
+      } else {
+        body['data'] = _redactText(body['data'] as String);
+      }
+    } else {
+      body['data'] = _redactJsonStrings(body['data']);
+    }
+  }
 }
 
 Object? _mutable(Object? value) => value is Map
@@ -88,28 +248,7 @@ final class RedactionPolicy {
       if (setCookie) 'set-cookie',
     ];
     for (final rule in [HeaderRedactionRule(presets), ...?rules]) {
-      switch (rule) {
-        case HeaderRedactionRule():
-          if (payload['type'] != 'http') continue;
-          if (rule.target.includesRequest) {
-            _redactHeaders(payload['requestHeaders'], rule);
-          }
-          if (rule.target.includesResponse && payload['response'] is Map) {
-            _redactHeaders((payload['response'] as Map)['headers'], rule);
-          }
-        case QueryRedactionRule():
-          if (payload['type'] != 'http') continue;
-          _redactQueryParameters(payload, rule);
-        case BodyFieldRedactionRule():
-          if (payload['type'] == 'http') {
-            _redactBodyFields(payload['requestBody'], rule);
-            if (payload['response'] is Map) {
-              _redactBodyFields((payload['response'] as Map)['body'], rule);
-            }
-          }
-        case TextRedactionRule():
-          _applyTextRule(map, payload, rule);
-      }
+      rule.apply(map, payload);
     }
     return DiagnosticRecord.fromJson(map);
   }
@@ -146,157 +285,6 @@ final class RedactionPolicy {
       } on FormatException {
         // Ordinary text is preserved exactly.
       }
-    }
-  }
-
-  void _redactHeaders(Object? headers, HeaderRedactionRule rule) {
-    if (headers is! Map) return;
-    for (final key in headers.keys.toList()) {
-      if (rule.names.contains((key as String).toLowerCase())) {
-        headers[key] = (headers[key] as List)
-            .map((_) => redactionMarker)
-            .toList();
-      }
-    }
-  }
-
-  void _redactQueryParameters(
-    Map<String, Object?> payload,
-    QueryRedactionRule rule,
-  ) {
-    final uri = Uri.parse(payload['uri'] as String);
-    if (!uri.queryParametersAll.keys.any(rule.names.contains)) return;
-    final params = uri.queryParametersAll.map(
-      (k, values) => MapEntry(
-        k,
-        rule.names.contains(k)
-            ? values.map((_) => redactionMarker).toList()
-            : values,
-      ),
-    );
-    payload['uri'] = uri.replace(queryParameters: params).toString();
-  }
-
-  void _redactBodyFields(Object? value, BodyFieldRedactionRule rule) {
-    if (value is! Map || value['state'] != 'captured') return;
-    final isText = value['representation'] == 'text';
-    if (!isText && value['representation'] != 'json') return;
-    Object? data = value['data'];
-    if (isText) {
-      try {
-        data = jsonDecode(data as String);
-      } catch (_) {
-        return;
-      }
-    }
-    var changed = false;
-    for (final path in rule.paths) {
-      final keys = path.split('.');
-      Object? parent = data;
-      for (final key in keys.take(keys.length - 1)) {
-        parent = parent is Map ? parent[key] : null;
-      }
-      if (parent is Map && parent.containsKey(keys.last)) {
-        parent[keys.last] = redactionMarker;
-        changed = true;
-      }
-    }
-    if (changed) value['data'] = isText ? jsonEncode(data) : data;
-  }
-
-  void _applyTextRule(
-    Map<String, Object?> map,
-    Map<String, Object?> payload,
-    TextRedactionRule rule,
-  ) {
-    if (map.containsKey('context')) {
-      map['context'] = _redactJsonStrings(map['context'], rule);
-    }
-    _redactDiagnosticError(payload['error'], rule);
-    if (payload['type'] == 'log') {
-      payload['message'] = _redactText(payload['message'] as String, rule);
-      if (payload['stackTrace'] is String) {
-        payload['stackTrace'] = _redactText(
-          payload['stackTrace'] as String,
-          rule,
-        );
-      }
-      return;
-    }
-    if (payload['requestHeaders'] != null) {
-      payload['requestHeaders'] = _redactJsonStrings(
-        payload['requestHeaders'],
-        rule,
-      );
-    }
-    if (payload['response'] is Map) {
-      final response = payload['response'] as Map;
-      if (response['headers'] != null) {
-        response['headers'] = _redactJsonStrings(response['headers'], rule);
-      }
-    }
-    _redactBodyText(payload['requestBody'], rule);
-    if (payload['response'] is Map) {
-      _redactBodyText((payload['response'] as Map)['body'], rule);
-    }
-    final uri = Uri.parse(payload['uri'] as String);
-    final params = uri.queryParametersAll;
-    if (params.values.expand((v) => v).any((v) => _redactText(v, rule) != v)) {
-      payload['uri'] = uri
-          .replace(
-            queryParameters: params.map(
-              (k, v) => MapEntry(k, v.map((s) => _redactText(s, rule)).toList()),
-            ),
-          )
-          .toString();
-    }
-  }
-
-  String _redactText(String value, TextRedactionRule rule) => value
-      .split(redactionMarker)
-      .map((piece) => piece.replaceAll(rule.pattern, redactionMarker))
-      .join(redactionMarker);
-
-  Object? _redactJsonStrings(Object? value, TextRedactionRule rule) =>
-      value is String
-      ? _redactText(value, rule)
-      : value is List
-      ? value.map((item) => _redactJsonStrings(item, rule)).toList()
-      : value is Map
-      ? value.map(
-          (k, child) => MapEntry(k, _redactJsonStrings(child, rule)),
-        )
-      : value;
-
-  void _redactDiagnosticError(Object? error, TextRedactionRule rule) {
-    if (error is! Map) return;
-    for (final key in ['message', 'stackTrace']) {
-      if (error[key] is String) {
-        error[key] = _redactText(error[key] as String, rule);
-      }
-    }
-  }
-
-  void _redactBodyText(Object? body, TextRedactionRule rule) {
-    if (body is! Map || body['state'] != 'captured') return;
-    if (body['representation'] == 'text') {
-      // Parse JSON transiently so keys and JSON syntax are preserved.
-      Object? parsed;
-      var isJson = false;
-      try {
-        parsed = jsonDecode(body['data'] as String);
-        isJson = true;
-      } catch (_) {}
-      if (isJson) {
-        final changed = _redactJsonStrings(parsed, rule);
-        if (jsonEncode(changed) != jsonEncode(parsed)) {
-          body['data'] = jsonEncode(changed);
-        }
-      } else {
-        body['data'] = _redactText(body['data'] as String, rule);
-      }
-    } else {
-      body['data'] = _redactJsonStrings(body['data'], rule);
     }
   }
 }

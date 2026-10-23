@@ -82,6 +82,34 @@ void main() {
     },
   );
 
+  test('maxBodyCaptureBytes caps oversized request and response bodies to overflow state', () async {
+    final diagnostics = CodeKitDiagnostics();
+    final base = MethodClient();
+    final client = base.withDiagnostics(diagnostics, maxBodyCaptureBytes: 1024);
+    final largeText = 'X' * 5000;
+
+    base.response = http.Response(
+      largeText,
+      200,
+      headers: {'content-type': 'text/plain'},
+    );
+
+    await client.post(
+      Uri.https('example.test', '/upload'),
+      headers: {'content-type': 'text/plain'},
+      body: largeText,
+    );
+
+    final record = (await diagnostics.query(RecordQuery())).records.first;
+    final payload = record.payload as HttpPayload;
+    expect(payload.requestBody!.state, BodyCaptureState.overflow);
+    expect((payload.requestBody!.data as Map)['sizeBytes'], 5000);
+    expect(payload.response!.body!.state, BodyCaptureState.overflow);
+    expect((payload.response!.body!.data as Map)['sizeBytes'], 5000);
+    client.close();
+    await diagnostics.dispose();
+  });
+
   test('captures chunked JSON without changing bytes or URI query', () async {
     final diagnostics = CodeKitDiagnostics();
     final bytes = utf8.encode('{"title":"điện thoại"}');

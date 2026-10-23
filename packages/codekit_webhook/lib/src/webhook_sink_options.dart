@@ -193,4 +193,5 @@ String _formatBody(BodySnapshot body) => switch (body.state) {
   BodyCaptureState.absent => '(absent)',
   BodyCaptureState.disabled => '(capture disabled)',
   BodyCaptureState.unsupported => '(unsupported body)',
+  BodyCaptureState.overflow => '(omitted: body exceeded size limit)',
 };
