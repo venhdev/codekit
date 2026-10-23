@@ -16,6 +16,7 @@ class RecordsController extends ChangeNotifier {
   Set<HttpStatusGroup> statusGroups = {};
   Set<DurationLevel> durationLevels = {};
   Set<DiagnosticRecordType> types = {};
+  Set<String> methods = {};
   DateTime? from;
   DateTime? to;
   String search = '';
@@ -43,6 +44,7 @@ class RecordsController extends ChangeNotifier {
       statusGroups.isNotEmpty ||
       durationLevels.isNotEmpty ||
       types.isNotEmpty ||
+      methods.isNotEmpty ||
       from != null ||
       to != null;
 
@@ -51,6 +53,7 @@ class RecordsController extends ChangeNotifier {
     text: !regexMode && search.isNotEmpty ? search : null,
     regex: regexMode && search.isNotEmpty ? RegExp(search) : null,
     types: types.isEmpty ? null : types,
+    methods: methods.isEmpty ? null : methods,
     statusGroups: statusGroups.isEmpty ? null : statusGroups,
     durationLevels: durationLevels.isEmpty ? null : durationLevels,
     from: from,
@@ -146,12 +149,14 @@ class RecordsController extends ChangeNotifier {
     required Set<HttpStatusGroup> statuses,
     required Set<DurationLevel> durations,
     required Set<DiagnosticRecordType> recordTypes,
+    Set<String>? methods,
     DateTime? from,
     DateTime? to,
   }) async {
     statusGroups = Set.of(statuses);
     durationLevels = Set.of(durations);
     types = Set.of(recordTypes);
+    this.methods = methods != null ? Set.of(methods) : this.methods;
     this.from = from;
     this.to = to;
     await reload();

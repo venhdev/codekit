@@ -24,6 +24,7 @@ class _FiltersSheetState extends State<FiltersSheet> {
   late Set<HttpStatusGroup> statuses;
   late Set<DurationLevel> durations;
   late Set<DiagnosticRecordType> types;
+  late Set<String> methods;
   DateTime? from;
   DateTime? to;
 
@@ -33,6 +34,7 @@ class _FiltersSheetState extends State<FiltersSheet> {
     statuses = Set.of(widget.controller.statusGroups);
     durations = Set.of(widget.controller.durationLevels);
     types = Set.of(widget.controller.types);
+    methods = Set.of(widget.controller.methods);
     from = widget.controller.from;
     to = widget.controller.to;
   }
@@ -40,6 +42,13 @@ class _FiltersSheetState extends State<FiltersSheet> {
   void _toggle<T>(Set<T> target, T value) => setState(() {
     if (!target.add(value)) target.remove(value);
   });
+
+  void _toggleType(DiagnosticRecordType type) {
+    _toggle(types, type);
+    if (types.length == 1 && types.contains(DiagnosticRecordType.log)) {
+      methods.clear();
+    }
+  }
 
   Future<DateTime?> _pickDateTime(DateTime? initial) async {
     final date = await showDatePicker(
@@ -67,6 +76,7 @@ class _FiltersSheetState extends State<FiltersSheet> {
           statuses.clear();
           durations.clear();
           types.clear();
+          methods.clear();
           from = null;
           to = null;
         }),
@@ -80,10 +90,13 @@ class _FiltersSheetState extends State<FiltersSheet> {
             );
             return;
           }
+          final showMethodFilter =
+              types.isEmpty || types.contains(DiagnosticRecordType.http);
           await widget.controller.applyFilters(
             statuses: statuses,
             durations: durations,
             recordTypes: types,
+            methods: showMethodFilter ? methods : const {},
             from: from,
             to: to,
           );
@@ -177,10 +190,33 @@ class _FiltersSheetState extends State<FiltersSheet> {
               FilterChip(
                 label: Text(label),
                 selected: types.contains(type),
-                onSelected: (_) => _toggle(types, type),
+                onSelected: (_) => _toggleType(type),
               ),
           ],
         ),
+        if (types.isEmpty || types.contains(DiagnosticRecordType.http)) ...[
+          const SizedBox(height: 12),
+          Text('Method', style: Theme.of(context).textTheme.titleMedium),
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final method in <String>[
+                'GET',
+                'POST',
+                'PUT',
+                'PATCH',
+                'DELETE',
+                'HEAD',
+                'OPTIONS',
+              ])
+                FilterChip(
+                  label: Text(method),
+                  selected: methods.contains(method),
+                  onSelected: (_) => _toggle(methods, method),
+                ),
+            ],
+          ),
+        ],
       ],
     ),
   );

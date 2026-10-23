@@ -306,6 +306,54 @@ void main() {
       isA<LogPayload>(),
     );
   });
+  test('RecordQuery filters by HTTP methods with case-insensitivity and excludes logs', () async {
+    final d = CodeKitDiagnostics();
+    addTearDown(d.dispose);
+    await d
+        .log(
+          HttpInput(
+            recordId: 'http-get',
+            requestStartedAt: DateTime.utc(2026),
+            method: 'GET',
+            uri: Uri.parse('https://example.com/items'),
+          ),
+        )
+        .persistedOrNull();
+    await d
+        .log(
+          HttpInput(
+            recordId: 'http-post',
+            requestStartedAt: DateTime.utc(2026),
+            method: 'POST',
+            uri: Uri.parse('https://example.com/items'),
+          ),
+        )
+        .persistedOrNull();
+    await d.log(const LogInput(message: 'some log')).persistedOrNull();
+
+    final getResults = await d.query(RecordQuery(methods: {'get'}));
+    expect(getResults.records.map((r) => r.id), ['http-get']);
+
+    final postResults = await d.query(RecordQuery(methods: {'POST'}));
+    expect(postResults.records.map((r) => r.id), ['http-post']);
+
+    final multipleResults = await d.query(
+      RecordQuery(methods: {'GET', 'POST'}),
+    );
+    expect(
+      multipleResults.records.map((r) => r.id),
+      containsAll(['http-get', 'http-post']),
+    );
+
+    final noMatch = await d.query(RecordQuery(methods: {'DELETE'}));
+    expect(noMatch.records, isEmpty);
+
+    final q1 = RecordQuery(methods: {'GET'});
+    final q2 = RecordQuery(methods: {'get'});
+    final q3 = RecordQuery(methods: {'POST'});
+    expect(q1.fingerprint, equals(q2.fingerprint));
+    expect(q1.fingerprint, isNot(equals(q3.fingerprint)));
+  });
   test(
     'preset and body redaction preserve keys; raw export remains raw',
     () async {

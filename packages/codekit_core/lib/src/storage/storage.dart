@@ -74,6 +74,7 @@ class RecordQuery {
   final String? text;
   final RegExp? regex;
   final Set<DiagnosticRecordType>? types;
+  final Set<String>? methods;
   final Set<HttpStatusGroup>? statusGroups;
   final Set<DurationLevel>? durationLevels;
   final DateTime? from;
@@ -85,6 +86,7 @@ class RecordQuery {
     this.text,
     this.regex,
     Set<DiagnosticRecordType>? types,
+    Set<String>? methods,
     Set<HttpStatusGroup>? statusGroups,
     Set<DurationLevel>? durationLevels,
     this.from,
@@ -92,6 +94,9 @@ class RecordQuery {
     DurationThresholds? thresholds,
   }) : limit = limit ?? 100,
        types = types == null ? null : Set.unmodifiable(types),
+       methods = methods == null
+           ? null
+           : Set.unmodifiable(methods.map((m) => m.toUpperCase())),
        statusGroups = statusGroups == null
            ? null
            : Set.unmodifiable(statusGroups),
@@ -108,6 +113,8 @@ class RecordQuery {
   String get fingerprint {
     List<String>? names(Iterable<Enum>? v) =>
         v == null ? null : (v.map((e) => e.name).toList()..sort());
+    List<String>? sortedStrings(Iterable<String>? v) =>
+        v == null ? null : (v.toList()..sort());
     return jsonEncode({
       'text': text,
       'regex': regex?.pattern,
@@ -119,6 +126,7 @@ class RecordQuery {
           regex!.isDotAll,
         ],
       'types': names(types),
+      'methods': sortedStrings(methods),
       'status': names(statusGroups),
       'duration': names(durationLevels),
       'from': from?.toUtc().toIso8601String(),
@@ -135,6 +143,10 @@ class RecordQuery {
     bool allowed<T>(Set<T>? set, T value) =>
         set == null || set.isEmpty || set.contains(value);
     if (!allowed(types, type)) return false;
+    if (methods != null && methods!.isNotEmpty) {
+      final method = p is HttpPayload ? p.method.toUpperCase() : null;
+      if (method == null || !methods!.contains(method)) return false;
+    }
     final status = p is HttpPayload
         ? HttpStatusGroup.fromCode(p.response?.statusCode)
         : HttpStatusGroup.unknown;
@@ -203,7 +215,9 @@ final class DiagnosticCursorCodec {
   }) {
     if (cursor == null) return null;
     try {
-      final decoded = jsonMap(jsonDecode(utf8.decode(base64Url.decode(cursor))));
+      final decoded = jsonMap(
+        jsonDecode(utf8.decode(base64Url.decode(cursor))),
+      );
       if (decoded['v'] != version ||
           decoded['scope'] != scope ||
           decoded['query'] != query.fingerprint ||

@@ -1047,4 +1047,100 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'filter sheet shows method chips when HTTP eligible and hides when only App log selected',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final diagnostics = CodeKitDiagnostics();
+      addTearDown(diagnostics.dispose);
+      await diagnostics
+          .log(
+            HttpInput(
+              recordId: 'http-1',
+              requestStartedAt: DateTime.utc(2026),
+              method: 'GET',
+              uri: Uri.parse('https://example.com/api'),
+            ),
+          )
+          .persistedOrNull();
+
+      await tester.pumpWidget(
+        MaterialApp(home: CodeKitDiagnosticsScreen(diagnostics: diagnostics)),
+      );
+      await tester.pumpAndSettle();
+
+      // Open filters sheet
+      await tester.tap(find.byTooltip('Filters'));
+      await tester.pumpAndSettle();
+
+      // Initially with no type selection, Method row is visible
+      expect(find.text('Method'), findsOneWidget);
+      expect(find.widgetWithText(FilterChip, 'GET'), findsOneWidget);
+
+      // Select App log only -> Method row hides
+      await tester.tap(find.widgetWithText(FilterChip, 'App log'));
+      await tester.pumpAndSettle();
+      expect(find.text('Method'), findsNothing);
+
+      // Select HTTP record as well (both selected) -> Method row reappears
+      await tester.tap(find.widgetWithText(FilterChip, 'HTTP record'));
+      await tester.pumpAndSettle();
+      expect(find.text('Method'), findsOneWidget);
+
+      // Deselect App log (only HTTP record selected) -> Method row remains visible
+      await tester.tap(find.widgetWithText(FilterChip, 'App log'));
+      await tester.pumpAndSettle();
+      expect(find.text('Method'), findsOneWidget);
+
+      // Select GET method chip and submit Done
+      await tester.tap(find.widgetWithText(FilterChip, 'GET'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+
+      // Active filter chip row on main screen contains GET
+      expect(find.widgetWithText(InputChip, 'GET'), findsOneWidget);
+
+      // Delete the GET chip from the active filters row
+      await tester.tap(
+        find.descendant(
+          of: find.widgetWithText(InputChip, 'GET'),
+          matching: find.byType(Icon),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(InputChip, 'GET'), findsNothing);
+
+      // Re-open filters sheet (tooltip is now 'Filters active' since HTTP filter is active)
+      await tester.tap(find.byIcon(Icons.filter_list));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.widgetWithText(FilterChip, 'POST'),
+        50,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.widgetWithText(FilterChip, 'POST'));
+      await tester.pumpAndSettle();
+      // Deselect HTTP record and select only App log
+      await tester.tap(find.widgetWithText(FilterChip, 'HTTP record'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilterChip, 'App log'));
+      await tester.pumpAndSettle();
+      // Method row is hidden and method selection cleared
+      expect(find.text('Method'), findsNothing);
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+
+      // Verify POST is NOT in active filter chips, only App log is
+      expect(find.widgetWithText(InputChip, 'POST'), findsNothing);
+      expect(find.widgetWithText(InputChip, 'App log'), findsOneWidget);
+    },
+  );
 }

@@ -556,10 +556,36 @@ class _DiagnosticsRecordsScreenState extends State<_DiagnosticsRecordsScreen> {
                 onDeleted: () {
                   final next = Set<DiagnosticRecordType>.of(_controller.types)
                     ..remove(type);
+                  final nextMethods =
+                      next.length == 1 &&
+                          next.contains(DiagnosticRecordType.log)
+                      ? const <String>{}
+                      : _controller.methods;
                   _controller.applyFilters(
                     statuses: _controller.statusGroups,
                     durations: _controller.durationLevels,
                     recordTypes: next,
+                    methods: nextMethods,
+                    from: _controller.from,
+                    to: _controller.to,
+                  );
+                },
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          for (final method in _controller.methods)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: InputChip(
+                label: Text(method),
+                onDeleted: () {
+                  final next = Set<String>.of(_controller.methods)
+                    ..remove(method);
+                  _controller.applyFilters(
+                    statuses: _controller.statusGroups,
+                    durations: _controller.durationLevels,
+                    recordTypes: _controller.types,
+                    methods: next,
                     from: _controller.from,
                     to: _controller.to,
                   );
