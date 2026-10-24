@@ -300,7 +300,15 @@ Tap a row to reuse its query and mode; existing filters remain unchanged.
 └──────────────────────────────────┘
 ```
 
-The `1xx` and `Unknown` chips use neutral colors. The CodeKit bubble is placed in `MaterialApp.builder` with the same `navigatorKey` as the app; it remains available across app routes and is hidden while the viewer is open. Its visibility is governed by `enabled` (defaulting to `!kReleaseMode` to protect production releases while enabling debug and profile builds; callers can customize this with any boolean condition or disable it in favor of direct screen navigation via secret gestures).
+The `1xx` and `Unknown` chips use neutral colors. The CodeKit bubble is placed in `MaterialApp.builder` with the same `navigatorKey` as the app; it remains available across app routes and is hidden while the viewer is open.
+
+### Bubble presentation and activation behavior
+- **Master gatekeeper (`enabled`)**: Defaults to `!kReleaseMode` to protect production releases while enabling debug and profile builds. When `false`, zero listeners or overlay widgets are mounted.
+- **Trigger mode (`BubbleTriggerMode`)**:
+  - `shakeToToggle` (default): Starts hidden; shaking the device (or pressing `Ctrl+Shift+D` / `F12` on desktop/simulator) toggles its visibility.
+  - `immediate`: Renders on screen immediately when `enabled` is true.
+- **Idle opacity**: After 3 seconds of user inactivity (`idleTimeout`), the bubble automatically dims to 25% opacity (`idleOpacity`), waking back to 100% on any touch.
+- **Edge snap and docking**: Dragging the bubble within 32px of the left or right edge docks it into an 8px indicator flush against the border. Tapping the docked indicator expands it back to the full 48px circle; dragging it away returns it to free-floating.
 
 ## Dev proxy card and dialog
 

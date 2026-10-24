@@ -280,6 +280,7 @@ void main() {
           builder: (context, child) => CodeKitBubble(
             navigatorKey: navigatorKey,
             diagnostics: diagnostics,
+            triggerMode: BubbleTriggerMode.immediate,
             child: child!,
           ),
           home: const Scaffold(body: Text('Host screen')),
@@ -326,6 +327,7 @@ void main() {
         builder: (context, child) => CodeKitBubble(
           diagnostics: diagnostics,
           navigatorKey: navigatorKey,
+          triggerMode: BubbleTriggerMode.immediate,
           child: child!,
         ),
         home: const Scaffold(body: Text('Application')),
@@ -845,7 +847,22 @@ void main() {
     final diagnostics = CodeKitDiagnostics();
     final navigatorKey = GlobalKey<NavigatorState>();
 
-    // By default (!kReleaseMode in test environment), bubble is visible
+    // When triggerMode is immediate, bubble is visible on startup
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        builder: (context, child) => CodeKitBubble(
+          navigatorKey: navigatorKey,
+          diagnostics: diagnostics,
+          triggerMode: BubbleTriggerMode.immediate,
+          child: child!,
+        ),
+        home: const Scaffold(body: Text('Home')),
+      ),
+    );
+    expect(find.byIcon(Icons.bug_report_outlined), findsOneWidget);
+
+    // By default (shakeToToggle), bubble starts hidden
     await tester.pumpWidget(
       MaterialApp(
         navigatorKey: navigatorKey,
@@ -857,7 +874,7 @@ void main() {
         home: const Scaffold(body: Text('Home')),
       ),
     );
-    expect(find.byIcon(Icons.bug_report_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.bug_report_outlined), findsNothing);
 
     // When explicitly disabled, bubble is not rendered
     await tester.pumpWidget(

@@ -129,6 +129,48 @@ The extension returns that same Dio instance. The `package:http` integration
 wraps a client instead, so use and close the returned wrapper. See each package
 README for its setup and capture boundaries.
 
+## Flutter Diagnostics Bubble (`codekit_ui`)
+
+When incorporating `codekit_ui`, `CodeKitBubble` provides a non-intrusive floating trigger with automatic edge docking, idle opacity, and gesture activation:
+
+```text
+                        ┌──────────────────────────────────────────────┐
+                        │              CodeKitBubble                   │
+                        │        (enabled: !kReleaseMode)              │
+                        └──────────────────────┬───────────────────────┘
+                                               │
+                       ┌───────────────────────┴───────────────────────┐
+                       ▼                                               ▼
+         [BubbleTriggerMode.shakeToToggle]             [BubbleTriggerMode.immediate]
+             (Default: starts hidden)                        (Always visible)
+                       │                                               │
+          Shake Device / Ctrl+Shift+D                                  │
+                       │                                               │
+                       └───────────────────────┬───────────────────────┘
+                                               │
+                                               ▼
+                                 ┌───────────────────────────┐
+                                 │       Bubble Revealed     │
+                                 │        (100% Opacity)     │
+                                 └─────────────┬─────────────┘
+                                               │
+                    ┌──────────────────────────┴──────────────────────────┐
+          Dragged to open screen area                           Dragged to screen edge (<32px)
+                    │                                                     │
+                    ▼                                                     ▼
+     ┌─────────────────────────────┐                       ┌─────────────────────────────┐
+     │      Free-Floating          │                       │      Docked & Minimized     │
+     │  - Full circle button (48px)│                       │  - Snaps to left/right edge │
+     │  - Auto-dims to 25% after 3s│                       │  - Minimizes to 8px pill    │
+     │  - Tap: Wakes up & opens UI │                       │  - Tap: Expands to full 48px│
+     └─────────────────────────────┘                       └─────────────────────────────┘
+```
+
+- **Master Gatekeeper**: `enabled` defaults to `!kReleaseMode` to protect production releases. When `false`, zero sensors, listeners, or overlay widgets are mounted.
+- **Trigger Modes**: `BubbleTriggerMode.shakeToToggle` (default; starts hidden until shaken or toggled via `Ctrl+Shift+D` / `F12` on desktop/simulator) or `BubbleTriggerMode.immediate` (visible on startup).
+- **Edge Docking**: Dragging the bubble within 32px of the screen edge automatically docks and shrinks it into an 8px indicator.
+- **Idle Opacity**: After 3 seconds of inactivity, the bubble dims to 25% opacity so it never obstructs application content. Tapping or dragging wakes it back to 100%.
+
 ## Packages
 
 | Package | What it provides | Target |

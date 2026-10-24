@@ -784,11 +784,15 @@ The bubble is enabled in Debug and Profile builds by default (`enabled: !kReleas
 and automatically hidden in Release builds to protect production environments.
 Developers can customize visibility using any boolean condition (e.g. `enabled: kDebugMode`
 for debug-only, `enabled: false` to disable the bubble entirely and rely on a secret trigger
-gesture, or environment/role checks). It is draggable, available across app routes, and
-hidden while its viewer route is open. In-viewer toggle is supported out of the box from
-the viewer settings sheet. If the app owns its own navigation entry, use
-`CodeKitDiagnosticsScreen` directly and pass the same diagnostics object. The viewer is
-not required for recording, querying, Trace management, or export.
+gesture, or environment/role checks).
+
+#### Trigger Modes, Idle Opacity & Edge Docking
+- **Master Gatekeeper**: `enabled` is the master gatekeeper. When `false`, zero sensors, listeners, or overlay widgets are mounted.
+- **Trigger Modes**: `triggerMode` accepts `BubbleTriggerMode.shakeToToggle` (default; starts hidden until shaken or toggled via `Ctrl+Shift+D` / `F12` on desktop/simulator) or `BubbleTriggerMode.immediate` (visible on startup). Callers can also supply a custom `shakeStream`.
+- **Idle Opacity**: After 3 seconds of user inactivity, the bubble automatically dims to 25% opacity (`idleOpacity: 0.25`), preventing it from obscuring underlying app UI. Touching or dragging the bubble immediately wakes it back to 100% opacity.
+- **Edge Snap & Docking**: When dragged within 32px of the screen's left or right edge, the bubble automatically snaps to the border and minimizes into a subtle 8px pill. Tapping the docked indicator expands it back to the full 48px circle; dragging it back into the open screen area leaves it free-floating.
+
+If the app owns its own navigation entry, use `CodeKitDiagnosticsScreen` directly and pass the same diagnostics object. The viewer is not required for recording, querying, Trace management, or export.
 
 ### Settings shown in the viewer
 
@@ -1523,8 +1527,8 @@ Implementation rules:
 - If Flutter UI is selected:
   - If `Floating trigger bubble overlay` is checked: wrap the app in `MaterialApp.builder`
     using `CodeKitBubble` with the app's `navigatorKey`. `enabled` defaults to
-    `!kReleaseMode` to protect production releases automatically. In-viewer toggle
-    is supported out of the box.
+    `!kReleaseMode` to protect production releases automatically. Trigger modes
+    include `immediate` and `shakeToToggle`, with automatic edge docking and idle opacity.
   - If `Secret trigger point` is checked with `<Target widget>` and `<Access guard>`:
     locate the target widget in the app (e.g. `buildVersion` text in Settings/About,
     or a `customSecretWidget`) and protect the entrypoint using the specified guard:

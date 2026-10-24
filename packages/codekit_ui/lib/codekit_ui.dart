@@ -1,6 +1,7 @@
 /// Optional Flutter presentation for CodeKit diagnostics.
 library;
 
+export 'src/bubble/bubble_trigger_mode.dart' show BubbleTriggerMode;
 export 'src/bubble/codekit_bubble.dart' show CodeKitBubble;
 export 'src/proxy/codekit_proxy_card.dart' show CodeKitProxyCard;
 export 'src/proxy/codekit_proxy_dialog.dart'
